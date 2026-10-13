@@ -1,3 +1,5 @@
 build/
 *.user
 .vs/
+build*/
+__pycache__/
