@@ -8,12 +8,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DVONOX_BUILD_PLUGIN=ON -DVONOX_BUILD_TESTS=ON
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVONOX_BUILD_PLUGIN=ON -DVONOX_BUILD_TESTS=ON
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --parallel
       - name: Tests (DSP, engine, chain, plugin smoke)
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build --output-on-failure
       - name: Installer (Inno Setup)
         shell: pwsh
         run: |
