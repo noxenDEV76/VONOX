@@ -90,6 +90,13 @@ public:
         double y = x * gain;
         return std::clamp(y, -ceil, ceil); // guaranteed ceiling
     }
+    // Stereo-linked: one gain from the louder channel, so the image never shifts.
+    inline void processLinked(double& a, double& b) {
+        const double pk = std::max(std::abs(a), std::abs(b));
+        const double need = (pk > ceil) ? ceil / pk : 1.0;
+        gain = (need < gain) ? need : rel * gain + (1.0 - rel) * need;
+        a = std::clamp(a * gain, -ceil, ceil); b = std::clamp(b * gain, -ceil, ceil);
+    }
     double gainReductionDb() const { return -linToDb(gain); }
     void reset() { gain = 1.0; }
 private:
@@ -106,10 +113,11 @@ public:
         const double d = x * drive;
         double s;
         switch (mode) {
-        case Mode::Clean:      s = std::tanh(d * 0.6) / 0.6 * 0.9; break;
+        // all curves have unity small-signal gain, so low drive never changes the level
+        case Mode::Clean:      s = std::tanh(d * 0.6) / 0.6; break;
         case Mode::Warm:       s = std::tanh(d + 0.1 * d * d) ; break;
         case Mode::Analog:     s = d / (1.0 + std::abs(d)); break;
-        case Mode::Aggressive: s = std::clamp(d * 1.5, -1.0, 1.0); s = s - s * s * s / 3.0; break;
+        case Mode::Aggressive: s = std::clamp(d * 1.5, -1.0, 1.0); s = (s - s * s * s / 3.0) / 1.5; break;
         default: s = d;
         }
         s /= std::max(1.0, drive); // keep level roughly constant

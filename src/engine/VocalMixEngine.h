@@ -24,6 +24,8 @@ struct MixSettings {
     double optoThreshDb = -20, optoRatio = 2.0, optoAttackMs = 15, optoReleaseMs = 300;
     // De-esser
     double deEssHz = 7000, deEssThreshDb = -30, deEssAmount = 0.4;
+    // Dynamic resonance control (dynamic band centred on harshHz)
+    double resAmount = 0.0, resThreshDb = -30;
     // Additive EQ
     double presenceDb = 0, presenceHz = 3500, airDb = 0, warmthDb = 0;
     // Saturation
@@ -85,6 +87,11 @@ public:
         m.deEssAmount = std::clamp(b.deEss * (0.4 + 1.2 * p.sibilance), 0.1, 0.9);
         m.deEssThreshDb = p.sibilanceDb + p.rmsDb + 4.0 - 6.0 * p.sibilance;
 
+        // --- Dynamic resonance control: only engages on bright voices, threshold tracks the level ---
+        m.harshHz = 2500.0 + 1500.0 * p.brightness;
+        m.resAmount = std::clamp(0.25 + 0.6 * p.brightness * (0.4 + 0.6 * p.sibilance), 0.0, 0.8);
+        m.resThreshDb = p.rmsDb - 12.0;
+
         // --- Additive EQ: reduce boosts on bright/harsh/noisy sources ---
         const double brightFactor = 1.0 - 0.85 * p.brightness;
         const double noiseFactor = p.noisy ? 0.3 : 1.0;
@@ -113,7 +120,7 @@ public:
         r.optoRatio = 1.0 + (s.optoRatio - 1.0) * a;
         r.fetThreshDb = peakDb + (s.fetThreshDb - peakDb) * a;
         r.optoThreshDb = peakDb + (s.optoThreshDb - peakDb) * a;
-        r.deEssAmount *= a;
+        r.deEssAmount *= a; r.resAmount *= a;
         r.satDriveDb *= a;
         return r;
     }
