@@ -369,7 +369,8 @@ BASE = canvas.copy()
 # ======================= ANIMATED LAYERS =======================
 class FlameFx:
     """Looping procedural flames rising from the lettering shape (drawn behind the letters)."""
-    def __init__(self, clip_mask, src_mask, rise, strength, seed):
+    def __init__(self, clip_mask, src_mask, rise, strength, seed, g_ramp=(30, 20, 40, 135, 228), b_ramp=(210, 110, 50, 40, 150)):
+        self.g_ramp, self.b_ramp = g_ramp, b_ramp
         bb = src_mask.getbbox()
         self.box = (max(0, bb[0] - 24 * S), max(0, bb[1] - int((rise + 24) * S)), min(CW, bb[2] + 24 * S), min(CH, bb[3] + 12 * S))
         sm = np.asarray(src_mask.crop(self.box), np.float32) / 255; h, w = sm.shape
@@ -389,7 +390,7 @@ class FlameFx:
         heat = self.heat0[np.clip((self.ys + fy).astype(int), 0, self.h - 1), np.clip((self.xs + fx).astype(int), 0, self.w - 1)]
         v = np.clip(heat * (0.35 + 1.35 * t) + self.sm * 0.25, 0, 1.2)
         st = [0, 0.15, 0.4, 0.7, 1.0]
-        col = np.stack([np.interp(v, st, [110, 205, 255, 255, 255]), np.interp(v, st, [30, 20, 40, 135, 228]), np.interp(v, st, [210, 110, 50, 40, 150])], -1)
+        col = np.stack([np.interp(v, st, [110, 205, 255, 255, 255]), np.interp(v, st, self.g_ramp), np.interp(v, st, self.b_ramp)], -1)
         a = (np.clip((v - 0.06) * 2.0, 0, 1) * self.strength * self.clip)[..., None]
         reg = np.asarray(img.crop(self.box), np.float32)
         img.paste(Image.fromarray(np.clip(reg * (1 - a) + col * a, 0, 255).astype(np.uint8)), self.box[:2])
@@ -432,12 +433,13 @@ GCLIP = np.asarray(glass_mask.crop(GBOX), np.float32) / 255
 RAD = np.clip(1 - rr[GBOX[1]:GBOX[3], GBOX[0]:GBOX[2]], 0, 1) ** 1.5
 
 FX = [
-    FlameFx(title_window, vonox_mask, rise=26, strength=1.0, seed=3),
+    # VONOX: red/orange flame only (no pale-yellow core), same family as the AUTO MIX flame
+    FlameFx(title_window, vonox_mask, rise=26, strength=0.95, seed=3, g_ramp=(30, 20, 36, 70, 105), b_ramp=(210, 110, 50, 36, 50)),
     FlameFx(auto_window, auto_mask, rise=20, strength=0.95, seed=11),
 ]
 EMBERS = [
     Embers(26, (430, 670), 484, 34, auto_window, 21, size=(0.9, 2.2), palette=((255, 210, 130), (255, 140, 60), (255, 90, 70)), exclude=auto_mask),
-    Embers(22, (330, 770), 82, 40, title_window, 5, size=(0.9, 2.2), palette=((255, 210, 130), (255, 120, 60), (230, 90, 255)), exclude=vonox_mask),
+    Embers(22, (330, 770), 82, 40, title_window, 5, size=(0.9, 2.2), palette=((255, 90, 70), (255, 120, 60), (200, 90, 255)), exclude=vonox_mask),
     Embers(70, (440, 660), cy + 112, 215, glass_mask, 31, size=(1.0, 2.6), palette=((255, 90, 80), (255, 60, 110), (255, 150, 90), (190, 100, 255)), blur=2.2, gain=1.7, amp=(4, 16)),
     Embers(12, (450, 650), cy + 115, 200, glass_mask, 47, size=(4, 9), palette=((200, 40, 60), (160, 60, 220)), blur=5.0, gain=2.2, amp=(8, 22)),
 ]
