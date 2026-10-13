@@ -1,0 +1,2 @@
+# Presets
+Each factory preset = a vocal profile (style) + character offsets (presence/air/warmth/saturation) + compress macro + MIX AMOUNT, applied on top of the settings the engine computes for that profile. They are tonal *directions*, not copies of any artist's chain. The "US Rap-inspired" and "French Rap-inspired" groups use descriptive names only; no artist name, endorsement or exact-sound claim is made. They are unvalidated by listening tests and are meant to be tuned by ear (then AUTO MIX adapts the underlying stages to your voice).
