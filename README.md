@@ -27,7 +27,7 @@ Windows: GitHub Actions (`.github/workflows/build.yml`) builds the VST3, runs th
 |---|---|
 | DSP, analysis, AUTO MIX, chain | 37 unit/integration tests passing (synthetic signals) |
 | Plugin classes (state, A/B, presets, AUTO MIX, bypass, editor) | headless smoke test passing on Linux |
-| Windows VST3 + installer | built by CI — **not yet verified by a run in this repo** |
+| Windows VST3 + installer | built by GitHub Actions (MSVC): VST3 + tests + installer succeed; artifacts `VONOX-VST3-windows` and `VONOX-Setup` are attached to the run. Not yet loaded in a DAW |
 | FL Studio / other hosts | **not tested** |
 | Listening tests on real voices | **not done**; presets are starting points that need tuning by ear |
 | Saturation | no oversampling yet (some aliasing at high drive) |
