@@ -9,7 +9,7 @@ The real plugin UI is drawn by JUCE; this script is the art/animation reference.
 """
 import math, random, sys, os
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
 
 S = 2
 W, H = 1100, 700
@@ -369,7 +369,7 @@ BASE = canvas.copy()
 # ======================= ANIMATED LAYERS =======================
 class FlameFx:
     """Looping procedural flames rising from the lettering shape (drawn behind the letters)."""
-    def __init__(self, clip_mask, src_mask, rise, strength, seed, g_ramp=(30, 20, 40, 135, 228), b_ramp=(210, 110, 50, 40, 150)):
+    def __init__(self, clip_mask, src_mask, rise, strength, seed, g_ramp=(30, 20, 40, 135, 228), b_ramp=(210, 110, 50, 40, 150), exclude=None):
         self.g_ramp, self.b_ramp = g_ramp, b_ramp
         bb = src_mask.getbbox()
         self.box = (max(0, bb[0] - 24 * S), max(0, bb[1] - int((rise + 24) * S)), min(CW, bb[2] + 24 * S), min(CH, bb[3] + 12 * S))
@@ -379,7 +379,8 @@ class FlameFx:
             sh = np.zeros_like(sm); sh[:h - k, :] = sm[k:, :]
             heat = np.maximum(heat, sh * (1 - k / n) ** 1.3)
         self.heat0, self.sm, self.h, self.w, self.strength = heat, sm, h, w, strength
-        self.clip = np.asarray(clip_mask.crop(self.box), np.float32) / 255 * (1 - sm)     # behind the letters
+        ex = sm if exclude is None else np.asarray(exclude.crop(self.box), np.float32) / 255
+        self.clip = np.asarray(clip_mask.crop(self.box), np.float32) / 255 * (1 - ex)     # behind the letters
         self.ys, self.xs = np.mgrid[0:h, 0:w]
         self.N1 = pnoise(w, 8, 9 * S, 26 * S, seed); self.N2 = pnoise(w, 8, 14 * S, 14 * S, seed + 7); self.N3 = pnoise(w, 8, 6 * S, 30 * S, seed + 1)
     def _win(self, N, off): return N[(np.arange(self.h) + off) % N.shape[0], :]
@@ -432,14 +433,19 @@ GBOX = glass_mask.getbbox()
 GCLIP = np.asarray(glass_mask.crop(GBOX), np.float32) / 255
 RAD = np.clip(1 - rr[GBOX[1]:GBOX[3], GBOX[0]:GBOX[2]], 0, 1) ** 1.5
 
+# Title fire: a source strip along the whole bottom of the black window + the letters themselves,
+# so flames rise across the full width of the title plate.
+fire_src = Image.new("L", canvas.size, 0)
+ImageDraw.Draw(fire_src).rectangle([262 * S, 80 * S, 838 * S, 90 * S], fill=175)
 FX = [
     # VONOX: red/orange flame only (no pale-yellow core), same family as the AUTO MIX flame
-    FlameFx(title_window, vonox_mask, rise=26, strength=0.95, seed=3, g_ramp=(30, 20, 36, 70, 105), b_ramp=(210, 110, 50, 36, 50)),
+    FlameFx(title_window, fire_src, rise=54, strength=0.95, seed=3, g_ramp=(30, 20, 36, 70, 105), b_ramp=(210, 110, 50, 36, 50), exclude=vonox_mask),
     FlameFx(auto_window, auto_mask, rise=20, strength=0.95, seed=11),
 ]
 EMBERS = [
     Embers(26, (430, 670), 484, 34, auto_window, 21, size=(0.9, 2.2), palette=((255, 210, 130), (255, 140, 60), (255, 90, 70)), exclude=auto_mask),
-    Embers(22, (330, 770), 82, 40, title_window, 5, size=(0.9, 2.2), palette=((255, 90, 70), (255, 120, 60), (200, 90, 255)), exclude=vonox_mask),
+    Embers(80, (266, 834), 88, 60, title_window, 5, size=(0.9, 2.6), palette=((255, 70, 70), (255, 100, 110), (255, 60, 130), (210, 90, 255)), exclude=vonox_mask, gain=1.4, amp=(2, 12)),
+    Embers(12, (270, 830), 90, 54, title_window, 9, size=(3, 6), palette=((200, 40, 60), (160, 60, 220)), blur=4.0, gain=2.0, exclude=vonox_mask, amp=(6, 16)),
     Embers(70, (440, 660), cy + 112, 215, glass_mask, 31, size=(1.0, 2.6), palette=((255, 90, 80), (255, 60, 110), (255, 150, 90), (190, 100, 255)), blur=2.2, gain=1.7, amp=(4, 16)),
     Embers(12, (450, 650), cy + 115, 200, glass_mask, 47, size=(4, 9), palette=((200, 40, 60), (160, 60, 220)), blur=5.0, gain=2.2, amp=(8, 22)),
 ]
@@ -455,13 +461,13 @@ def render_frame(phase):
     reg = np.asarray(img.crop(GBOX), np.float32)
     reg += RAD[..., None] * GCLIP[..., None] * np.array([255, 35, 45], np.float32) * (0.08 + 0.16 * pulse)
     img.paste(Image.fromarray(np.clip(reg, 0, 255).astype(np.uint8)), GBOX[:2])
-    for em in EMBERS[2:]: em.render(img, phase)
+    for em in EMBERS[3:]: em.render(img, phase)
     reg = img.crop(BOX_O).convert("RGBA")
     g = GLOW_O.copy(); g.putalpha(g.getchannel("A").point(lambda v: int(v * (0.45 + 0.55 * pulse)))); reg.alpha_composite(g); reg.alpha_composite(TXT_O)
     img.paste(reg.convert("RGB"), BOX_O[:2])
     # flames + embers for the two titles
     for fx in FX: fx.render(img, phase)
-    for em in EMBERS[:2]: em.render(img, phase)
+    for em in EMBERS[:3]: em.render(img, phase)
     # light sweep across all metal lettering
     arr = np.asarray(img, np.float32)
     pos = -0.15 + 1.3 * phase
