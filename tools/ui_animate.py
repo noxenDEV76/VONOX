@@ -11,6 +11,7 @@ import math, random, sys, os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
 
+EXPORT = bool(os.environ.get("VONOX_EXPORT"))   # asset-export mode: no value arcs / knob bodies / meter segments
 S = 2
 W, H = 1100, 700
 CW, CH = W * S, H * S
@@ -198,6 +199,12 @@ def knob(cx, cy, label, value, r=29, accent=RED):
     inner = Image.new("L", canvas.size, 0)
     ImageDraw.Draw(inner).ellipse([cx - R - 4 * S, cy - R - 4 * S, cx + R + 4 * S, cy + R + 4 * S], fill=255)
     lit(inner, base=24, bevel=3, k=2.0, invert=True, mul=0.7)
+    if EXPORT:                                   # socket + label only; the plugin draws arc and body live
+        pl = Image.new("L", canvas.size, 0)
+        ImageDraw.Draw(pl).rounded_rectangle([cx - 39 * S, cy + R + 12 * S, cx + 39 * S, cy + R + 34 * S], 4 * S, fill=255)
+        lit(pl, base=30, bevel=2.5, k=2.0, invert=True, mul=0.8)
+        metal_label((cx0, cy0 + r + 23), label, 11.5, glow_col=accent, glow_str=0.7)
+        return
     box = [cx - R - 7 * S, cy - R - 7 * S, cx + R + 7 * S, cy + R + 7 * S]
     glow(lambda g, c: g.arc(box, 135, 135 + 270 * value, fill=c + (255,), width=3 * S), accent, 4, 1.5)
     d = D(); d.arc(box, 135, 405, fill=(0, 0, 0, 170), width=3 * S)
@@ -218,7 +225,30 @@ def knob(cx, cy, label, value, r=29, accent=RED):
     lit(pl, base=30, bevel=2.5, k=2.0, invert=True, mul=0.8)
     metal_label((cx0, cy0 + r + 23), label, 11.5, glow_col=accent, glow_str=0.7)
 
-def button(x, y, w, h, text, active=False, color=RED, fs=14):
+def knob_body(r):
+    """White knurled knob body without pointer (RGBA, 1x size) - rotated live by the plugin."""
+    R = r * S; k = Image.new("RGBA", (int(2 * R + 2), int(2 * R + 2)), (0, 0, 0, 0)); kd = ImageDraw.Draw(k)
+    for i in range(int(R), 0, -1):
+        t = i / R; v = int(135 + 120 * (1 - t) ** 0.9); kd.ellipse([R - i, R - i, R + i, R + i], fill=(v, v, min(255, v + 6), 255))
+    kd.ellipse([1, 1, 2 * R - 1, 2 * R - 1], outline=(25, 25, 30, 255), width=3 * S)
+    for i in range(48):
+        a = i * 7.5 * math.pi / 180
+        kd.line([R + math.cos(a) * (R - 7 * S), R + math.sin(a) * (R - 7 * S), R + math.cos(a) * (R - 2), R + math.sin(a) * (R - 2)], fill=(105, 105, 118, 255), width=S)
+    kd.ellipse([R * .42, R * .3, R * 1.1, R * .78], outline=(255, 255, 255, 90), width=S)
+    return k.resize((k.width // S, k.height // S), Image.LANCZOS)
+
+SPRITES = {}
+def button(x, y, w, h, text, active=False, color=RED, fs=14, name=None):
+    if EXPORT and name:                          # export both states as opaque sprites
+        saved = canvas.copy(); rect = (int((x - 8) * S), int((y - 8) * S), int((x + w + 8) * S), int((y + h + 8) * S))
+        for st in (False, True):
+            canvas.paste(saved); _button(x, y, w, h, text, st, color, fs)
+            SPRITES[f"btn_{name}_{'on' if st else 'off'}"] = (canvas.crop(rect), rect)
+        canvas.paste(saved); _button(x, y, w, h, text, False, color, fs)
+    else:
+        _button(x, y, w, h, text, active, color, fs)
+
+def _button(x, y, w, h, text, active=False, color=RED, fs=14):
     shape = Image.new("L", canvas.size, 0)
     ImageDraw.Draw(shape).rounded_rectangle([x * S, y * S, (x + w) * S, (y + h) * S], 9 * S, fill=255)
     if active: glow(lambda g, c: g.rounded_rectangle([x * S, y * S, (x + w) * S, (y + h) * S], 9 * S, fill=c + (210,)), color, 8, 1.1)
@@ -231,7 +261,7 @@ def meter(x, y, w, h, label, level):
     d.rounded_rectangle([x * S, y * S, (x + w) * S, (y + h) * S], 4 * S, fill=(5, 4, 9, 255), outline=(0, 0, 0, 255), width=2 * S)
     d.rounded_rectangle([(x - 2) * S, (y - 2) * S, (x + w + 2) * S, (y + h + 2) * S], 5 * S, outline=(110, 110, 125, 255), width=S)
     segs = 26; sw = (w - 8) / segs
-    for i in range(segs):
+    for i in (range(segs) if not EXPORT else []):
         on = (i / segs) < level
         col = VIOLET if i < segs * 0.6 else ((255, 80, 150) if i < segs * 0.85 else RED)
         if on: glow(lambda g, c, i=i: g.rectangle([(x + 4 + i * sw) * S, (y + 4) * S, (x + 4 + (i + 1) * sw - 2) * S, (y + h - 4) * S], fill=c + (160,)), col, 2, 0.8)
@@ -342,9 +372,9 @@ meter(44, 522, 346, 22, "INPUT", 0.55); meter(44, 574, 346, 22, "OUTPUT", 0.68);
 # BOTTOM RIGHT: controls
 panel(682, 478, 400, 200, cut=18)
 knob(746, 566, "MIX", 0.72, r=26, accent=VIOLET); knob(841, 566, "OUTPUT", 0.5, r=26)
-button(905, 512, 150, 34, "BYPASS", False, RED, 13)
-button(905, 556, 70, 34, "A", True, VIOLET, 15); button(985, 556, 70, 34, "B", False, VIOLET, 15)
-button(905, 600, 150, 34, "LEVEL MATCH", True, RED, 12)
+button(905, 512, 150, 34, "BYPASS", False, RED, 13, name="bypass")
+button(905, 556, 70, 34, "A", True, VIOLET, 15, name="a"); button(985, 556, 70, 34, "B", False, VIOLET, 15, name="b")
+button(905, 600, 150, 34, "LEVEL MATCH", True, RED, 12, name="level")
 
 # BOTTOM CENTER: hexagon emblem plate with the embossed "V" mark
 hexp = [(550 + 112 * math.cos(math.radians(60 * i)), 598 + 78 * math.sin(math.radians(60 * i))) for i in range(6)]
@@ -454,7 +484,7 @@ SHINE_NP = np.asarray(SHINE, np.float32) / 255
 U = ((xx / CW + 0.35 * yy / CH) / 1.35).astype(np.float32)
 VIG = np.clip(1.12 - 0.4 * np.hypot((xx - CW / 2) / (CW / 2), (yy - CH / 2) / (CH / 2)) ** 2, 0.4, 1.0).astype(np.float32)
 
-def render_frame(phase):
+def render_frame(phase, shine=True):
     img = BASE.copy()
     pulse = 0.5 + 0.5 * math.sin(2 * math.pi * phase)
     # display: breathing red glow, then particles, then readout on top
@@ -471,8 +501,9 @@ def render_frame(phase):
     # light sweep across all metal lettering
     arr = np.asarray(img, np.float32)
     pos = -0.15 + 1.3 * phase
-    band = np.exp(-(((U - pos) / 0.05) ** 2)) * SHINE_NP
-    arr += band[..., None] * np.array([255, 215, 230], np.float32) * 0.55
+    if shine:
+        band = np.exp(-(((U - pos) / 0.05) ** 2)) * SHINE_NP
+        arr += band[..., None] * np.array([255, 215, 230], np.float32) * 0.55
     arr *= VIG[..., None]
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).resize((W, H), Image.LANCZOS)
 
