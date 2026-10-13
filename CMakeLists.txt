@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.22)
+project(VONOX VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Standalone DSP engine (no JUCE dependency, fully unit-testable)
+add_library(vonox_dsp INTERFACE)
+target_include_directories(vonox_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+option(VONOX_BUILD_TESTS "Build DSP unit tests" ON)
+if(VONOX_BUILD_TESTS)
+    enable_testing()
+    add_executable(vonox_tests tests/dsp_tests.cpp)
+    target_link_libraries(vonox_tests PRIVATE vonox_dsp)
+    add_test(NAME dsp COMMAND vonox_tests)
+endif()
+
+# VST3 plugin (added in a later phase, requires JUCE via FetchContent)
+option(VONOX_BUILD_PLUGIN "Build the VST3 plugin (needs JUCE)" OFF)
+if(VONOX_BUILD_PLUGIN)
+    add_subdirectory(plugin)
+endif()
