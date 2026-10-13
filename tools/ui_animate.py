@@ -440,7 +440,7 @@ ImageDraw.Draw(fire_src).rectangle([262 * S, 80 * S, 838 * S, 90 * S], fill=175)
 FX = [
     # VONOX: red/orange flame only (no pale-yellow core), same family as the AUTO MIX flame
     FlameFx(title_window, fire_src, rise=54, strength=0.95, seed=3, g_ramp=(30, 20, 36, 70, 105), b_ramp=(210, 110, 50, 36, 50), exclude=vonox_mask),
-    FlameFx(auto_window, auto_mask, rise=20, strength=0.95, seed=11),
+    FlameFx(auto_window, auto_mask, rise=20, strength=0.55, seed=11),
 ]
 EMBERS = [
     Embers(26, (430, 670), 484, 34, auto_window, 21, size=(0.9, 2.2), palette=((255, 210, 130), (255, 140, 60), (255, 90, 70)), exclude=auto_mask),
