@@ -1,4 +1,4 @@
-# VONOX — AI Vocal Engine (VST3)
+# VONOX — AI Vocal MIX (VST3)
 
 Automatic vocal-mixing plugin. **AUTO MIX** analyses your vocal (levels, dynamics, noise, tonal balance, sibilance) with real DSP measurements and sets a 10-stage chain for the selected vocal profile. "AI" here means adaptive analysis and rules, not a neural network.
 
