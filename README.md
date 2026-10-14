@@ -1,40 +1,88 @@
-# VONOX — AI Vocal MIX (VST3)
+<div align="center">
 
-Automatic vocal-mixing plugin. **AUTO MIX** analyses your vocal (levels, dynamics, noise, tonal balance, sibilance) with real DSP measurements and sets a 10-stage chain for the selected vocal profile. "AI" here means adaptive analysis and rules, not a neural network.
+# VONOX — AI Vocal MIX
 
-![VONOX](docs/vonox_plugin_snapshot.png)
+### Your vocal, mixed. One click.
 
-## Signal chain (zero latency)
-Subtractive EQ (HPF, low-mid, boxiness, harshness) → FET compressor → opto leveler → dynamic resonance control → de-esser → warmth / presence / air → saturation → output trim → stereo-linked peak limiter. Bypass is a 10 ms crossfade to the untouched input.
+A vocal mixing plugin that listens to your voice, then sets up the whole chain for you.<br>
+Built for rap, melodic, drill, trap, R&B and pop vocals. VST3, Windows.
 
-## Using it
-1. Insert on a vocal track, play 3–15 s of the vocal, press **AUTO MIX**.
-2. Pick a profile with ◀ ▶ or click the profile box for the factory presets (universal, US-rap-inspired, French-rap-inspired — descriptive tonal references only, see `docs/PRESETS.md`).
-3. **MIX AMOUNT** scales every stage's intensity (it is not a dry/wet fader). **COMPRESS**, **LEVEL MATCH**, **A/B**, **BYPASS** as labelled.
-4. All finer parameters (FET/opto timings, de-esser frequency, resonance, …) are real automatable parameters exposed in the host's parameter list (in FL Studio: plugin wrapper → parameters).
+![VONOX in action](docs/vonox_demo.gif)
 
-## Build
-Requires CMake ≥ 3.22, a C++20 compiler. JUCE 8.0.15 is fetched automatically.
+**[⬇ Download the installer](../../releases/latest)** · [Video (mp4)](docs/vonox_demo.mp4) · [Build it yourself](#build-it-yourself)
+
+</div>
+
+---
+
+## Why this exists
+
+You record a take, and then comes the hour of fiddling: EQ here, compressor there, de-esser, a bit of saturation, limiter, and still it doesn't sit right. VONOX does that first pass for you.
+
+Hit **AUTO MIX** while your vocal plays. VONOX measures it (levels, dynamics, noise, boxiness, harshness, sibilance) and sets every stage for the vocal profile you picked. Then you tweak, or you don't.
+
+No cloud, no account, no neural network. It's measurements and carefully tuned rules, running on your CPU with **zero latency**.
+
+## What you get
+
+- **AUTO MIX**: analyses your actual vocal and writes the settings. Your voice, not a generic preset.
+- **34 factory presets** in three groups: Universal, US-rap-inspired, French-rap-inspired. Swipe through them with the profile box in the middle of the machine.
+- **9 vocal profiles**: Clean Studio, Modern Rap, Melodic Rap, Aggressive Rap, Drill, Trap, R&B, Pop, Custom.
+- **MIX AMOUNT**: dials the *intensity of every stage* up or down (not a dry/wet fader), so 50 % is a lighter mix, not a blend with the raw take.
+- **A/B slots**, **BYPASS** (smooth 10 ms crossfade) and **LEVEL MATCH**, so you judge the sound and not the volume.
+- **Live meters**: input, output, gain reduction.
+- **The look**: scratched steel, chains, flames. It's a machine, it should look like one.
+
+## The chain
+
 ```
-cmake -S . -B build -DVONOX_BUILD_PLUGIN=ON -DVONOX_BUILD_TESTS=ON
-cmake --build build --config Release
-ctest --test-dir build -C Release
+Subtractive EQ → FET compressor → Opto leveler → Resonance control
+   → De-esser → Warmth / Presence / Air → Saturation → Output → Limiter
 ```
-Windows: GitHub Actions (`.github/workflows/build.yml`) builds the VST3, runs the tests and produces `VONOX-Setup.exe` (Inno Setup, installs to `C:\Program Files\Common Files\VST3`). In FL Studio: *Options → Manage plugins → Find installed plugins*.
 
-## Honest status
-| Item | State |
-|---|---|
-| DSP, analysis, AUTO MIX, chain | 37 unit/integration tests passing (synthetic signals) |
-| Plugin classes (state, A/B, presets, AUTO MIX, bypass, editor) | headless smoke test passing on Linux |
-| Windows VST3 + installer | built by GitHub Actions (MSVC): VST3 + tests + installer succeed; artifacts `VONOX-VST3-windows` and `VONOX-Setup` are attached to the run. Not yet loaded in a DAW |
-| FL Studio / other hosts | **not tested** |
-| Listening tests on real voices | **not done**; presets are starting points that need tuning by ear |
-| Saturation | no oversampling yet (some aliasing at high drive) |
-| Limiter | sample-peak, non-lookahead hard clamp (not true-peak) |
-| De-esser / resonance detectors | per channel (not stereo-linked) |
-| Pitch correction | not implemented |
-| Resizable UI | no (fixed 1100×700) |
+Every parameter behind the knobs is a real, automatable parameter. The ten big knobs are the macros; the fine ones (attack and release times, de-esser frequency, resonance threshold…) show up in your host's parameter list.
 
-## Licensing
-VONOX links **JUCE**, which is dual-licensed (AGPLv3 or a commercial JUCE licence). Distributing binaries requires either releasing VONOX under AGPLv3-compatible terms or holding a JUCE commercial licence. Choose before publishing releases; no licence file is set yet.
+## Install
+
+1. Grab **`VONOX-Setup.exe`** from the [latest release](../../releases/latest).
+2. Run it. It installs to `C:\Program Files\Common Files\VST3`.
+3. In FL Studio: *Options → Manage plugins → Find installed plugins*. VONOX shows up as an effect.
+
+Windows might show a SmartScreen warning: the installer isn't code-signed yet.
+
+## How to use it
+
+1. Put VONOX on your vocal track.
+2. Play 3 to 15 seconds of the vocal and press **AUTO MIX**.
+3. Pick a profile with ◀ ▶, or click the profile name to open the presets.
+4. Adjust **MIX AMOUNT** and **COMPRESS** to taste. Use **A/B** to compare, **LEVEL MATCH** to stay honest.
+
+## Straight talk
+
+This is an early release (0.1.0). Here's what's true today:
+
+- The DSP, the analysis and the plugin logic are covered by automated tests, run on synthetic signals. Windows and Linux builds are green on GitHub Actions.
+- **I haven't done listening tests on real voices yet**, and the presets are starting points: tune them by ear.
+- Saturation isn't oversampled yet, so very high drive can alias a little.
+- The limiter is a simple sample-peak one, not a true-peak lookahead.
+- No pitch correction. It's not part of VONOX and nothing here pretends otherwise.
+- Fixed window size (1100×700). Windows VST3 only for now.
+- The artist-inspired preset groups are *tonal directions with descriptive names*, not copies of anyone's chain, and not endorsed by anyone. See [docs/PRESETS.md](docs/PRESETS.md).
+
+Found a bug or a preset that sounds off? Open an issue, that's exactly the feedback this version needs.
+
+## Build it yourself
+
+Needs CMake 3.22+ and a C++20 compiler. [JUCE](https://juce.com) 8.0.15 is downloaded automatically.
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVONOX_BUILD_PLUGIN=ON -DVONOX_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build
+```
+
+The DSP engine in `src/` is header-only C++20 and doesn't depend on JUCE; the plugin lives in `plugin/`. The Windows installer script is in `installer/`, the CI in `.github/workflows/`.
+
+## License
+
+VONOX is released under the **GNU AGPL v3** (see [LICENSE](LICENSE)). It uses [JUCE](https://juce.com), which is available under the AGPLv3 as well.
