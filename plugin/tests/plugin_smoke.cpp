@@ -47,11 +47,29 @@ int main(int argc, char** argv) {
     q.switchAB(0); CHECK(std::abs(q.apvts.getRawParameterValue("warmth")->load() - warm) < 0.02f);
 
     p.setParam("bypass", 1.f);
-    for (int i = 0; i < 20; ++i) { voice(buf, sr, t); juce::AudioBuffer<float> ref(buf); p.processBlock(buf, midi); if (i == 19) { bool same = true; for (int j = 0; j < blk; ++j) same &= buf.getSample(0, j) == ref.getSample(0, j); CHECK(same); } }
+    { std::vector<float> hin, hout;   // bypass = the input delayed by exactly the reported latency (bit-exact after the 10 ms fade)
+      for (int i = 0; i < 60; ++i) { voice(buf, sr, t); for (int j = 0; j < blk; ++j) hin.push_back(buf.getSample(0, j)); p.processBlock(buf, midi); for (int j = 0; j < blk; ++j) hout.push_back(buf.getSample(0, j)); }
+      const size_t L = size_t(p.getLatencySamples()); bool same = true; for (size_t i = size_t(40 * blk); i < hout.size(); ++i) same &= hout[i] == hin[i - L];
+      CHECK(same); }
     p.setParam("bypass", 0.f);
 
     CHECK(p.getNumPrograms() >= 60);
-    CHECK(p.getLatencySamples() == 0);
+    { // user presets: save, list, change, load, delete
+      p.setParam("warmth", 2.25f); CHECK(p.saveUserPreset("VONOX smoke test")); CHECK(p.userPresetNames().contains("VONOX smoke test"));
+      p.setParam("warmth", -1.f); CHECK(p.loadUserPreset("VONOX smoke test")); CHECK(std::abs(p.apvts.getRawParameterValue("warmth")->load() - 2.25f) < 0.02f);
+      p.userPresetDir().getChildFile("VONOX smoke test.vonoxpreset").deleteFile(); }
+    { // every preset (artist names, styles, vocal FX) applies and renders finite audio under the ceiling, stereo
+      int artists = 0; bool allOk = true; const auto& ps = vonox::factoryPresets();
+      for (int i = 0; i < int(ps.size()); ++i) {
+          if (ps[size_t(i)].artist) ++artists;
+          VonoxProcessor q2; q2.setPlayConfigDetails(2, 2, sr, blk); q2.prepareToPlay(sr, blk); q2.applyPreset(i); long t2 = 0; juce::AudioBuffer<float> b2(2, blk);
+          for (int k = 0; k < 24; ++k) { voice(b2, sr, t2); q2.processBlock(b2, midi); }
+          for (int c = 0; c < 2; ++c) for (int j = 0; j < blk; ++j) { const float v = b2.getSample(c, j); allOk &= std::isfinite(v) && std::abs(v) <= 1.0f; }
+      }
+      CHECK(allOk); CHECK(artists >= 38); }
+    CHECK(p.getLatencySamples() == p.chain.latency() && p.getLatencySamples() > 500);
+    CHECK(p.getNumPrograms() >= 80);
+    { p.applyPreset(int(vonox::factoryPresets().size()) - 1); CHECK(p.getProgramName(p.getCurrentProgram()).isNotEmpty()); }
 
     {
         std::unique_ptr<juce::AudioProcessorEditor> ed(p.createEditor());
@@ -66,26 +84,30 @@ int main(int argc, char** argv) {
                 juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
                 auto i1 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
                 juce::File f1 = juce::File(argv[1]).getChildFile("editor_main.png"); f1.deleteFile(); { juce::FileOutputStream o1(f1); juce::PNGImageFormat().writeImageToStream(i1, o1); }
+                ve->showBrowser(true); for (int k = 0; k < 12; ++k) juce::MessageManager::getInstance()->runDispatchLoopUntil(50);
+                auto i3 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
+                juce::File f3 = juce::File(argv[1]).getChildFile("editor_presets.png"); f3.deleteFile(); { juce::FileOutputStream o3(f3); juce::PNGImageFormat().writeImageToStream(i3, o3); }
+                ve->showBrowser(false);
                 ve->showAdvanced(true); juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
                 auto i2 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
                 juce::File f2 = juce::File(argv[1]).getChildFile("editor_adv.png"); f2.deleteFile(); { juce::FileOutputStream o2(f2); juce::PNGImageFormat().writeImageToStream(i2, o2); }
             }
         }
     }
-    // optional: frame dump for the README animation (arg 2 = number of presets to cycle)
+    // optional: frame dump for the README animation (arg 2 = output dir): preset swipe, preset browser, advanced panel
     if (argc > 2) {
-        std::unique_ptr<juce::AudioProcessorEditor> ed(p.createEditor());
-        const int picks[] = { 0, 4, 18, 24, 27, 13 }; int n = 0;
-        for (int pi : picks) {
-            p.applyPreset(pi);
-            for (int f = 0; f < 30; ++f) {
-                for (int k = 0; k < 4; ++k) { voice(buf, sr, t); p.processBlock(buf, midi); }
-                juce::MessageManager::getInstance()->runDispatchLoopUntil(40);
-                auto img = ed->createComponentSnapshot(ed->getLocalBounds(), true, 1.0f);
-                juce::File fl = juce::File(argv[2]).getChildFile(juce::String::formatted("f%04d.png", n++)); fl.deleteFile();
-                juce::FileOutputStream fo(fl); juce::PNGImageFormat().writeImageToStream(img, fo);
-            }
-        }
+        std::unique_ptr<juce::AudioProcessorEditor> ed(p.createEditor()); auto* ve = dynamic_cast<VonoxEditor*>(ed.get()); int n = 0;
+        auto shot = [&](int blocks) {
+            for (int k = 0; k < blocks; ++k) { voice(buf, sr, t); p.processBlock(buf, midi); }
+            juce::MessageManager::getInstance()->runDispatchLoopUntil(40);
+            auto img = ed->createComponentSnapshot(ed->getLocalBounds(), true, 1.0f);
+            juce::File fl = juce::File(argv[2]).getChildFile(juce::String::formatted("f%04d.png", n++)); fl.deleteFile();
+            juce::FileOutputStream fo(fl); juce::PNGImageFormat().writeImageToStream(img, fo);
+        };
+        auto find = [](const char* nm) { const auto& ps = vonox::factoryPresets(); for (int i = 0; i < int(ps.size()); ++i) if (ps[size_t(i)].artist && juce::String(ps[size_t(i)].artist) == nm) return i; for (int i = 0; i < int(ps.size()); ++i) if (juce::String(ps[size_t(i)].name) == nm) return i; return 0; };
+        for (const char* nm : { "Travis Scott", "Drake", "Doja Cat", "Booba", "Heavy Autotune" }) { p.applyPreset(find(nm)); for (int f = 0; f < 22; ++f) shot(4); }
+        ve->showBrowser(true); for (int f = 0; f < 40; ++f) shot(4); ve->showBrowser(false);
+        p.applyPreset(find("Natural Harmony")); ve->showAdvanced(true); for (int f = 0; f < 26; ++f) shot(4);
     }
     p.releaseResources();
     std::printf(fails ? "SMOKE FAILED (%d)\n" : "SMOKE PASSED\n", fails);

@@ -3,6 +3,7 @@
 // IDs are part of the saved-project format: never rename, reorder or reuse them.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "engine/VocalMixEngine.h"
+#include "engine/VocalChain.h"
 #include <array>
 
 namespace vonox::params {
@@ -18,6 +19,10 @@ enum F : int {
     space, character, width, parComp, exciter,
     rvAmount, rvDecay, rvPre, rvDamp, rvHp, rvLp,
     dlAmount, dlMs, dlFb, dlHp, dlLp, doubler, chorus, duck,
+    // ---- v0.3 voice stages (appended: ids of earlier parameters never change)
+    tune, retune, humanize, harm1Gain, harm2Gain, octDown, octUp,
+    nrAmount, breathAmount, plosiveAmount, inputGain, autoLevelTarget,
+    dynEqHz, dynEqAmount, dynEqThresh, unmask, bandLimit,
     kNumFloats
 };
 
@@ -72,6 +77,23 @@ inline constexpr Def kFloats[kNumFloats] = {
     { "doubler",     "Doubler",           0.f,    1.f,     0.f,  "",   1.f },
     { "chorus",      "Chorus",            0.f,    1.f,     0.f,  "",   1.f },
     { "duck",        "Effects Ducking",   0.f,    1.f,     0.55f,"",   1.f },
+    { "tune",        "Tune Amount",       0.f,    100.f,   0.f,  "%",  1.f },
+    { "retune",      "Retune Speed",      0.f,    400.f,   60.f, "ms", 0.5f },
+    { "humanize",    "Humanize",          0.f,    1.f,     0.3f, "",   1.f },
+    { "harm1_gain",  "Harmony 1 Level",   0.f,    1.f,     0.f,  "",   1.f },
+    { "harm2_gain",  "Harmony 2 Level",   0.f,    1.f,     0.f,  "",   1.f },
+    { "oct_down",    "Octave Down",       0.f,    1.f,     0.f,  "",   1.f },
+    { "oct_up",      "Octave Up",         0.f,    1.f,     0.f,  "",   1.f },
+    { "nr_amount",   "Noise Reduction",   0.f,    1.f,     0.f,  "",   1.f },
+    { "breath",      "Breath Control",    0.f,    1.f,     0.f,  "",   1.f },
+    { "plosive",     "Plosive Control",   0.f,    1.f,     0.f,  "",   1.f },
+    { "input_gain",  "Input Gain",       -24.f,   24.f,    0.f,  "dB", 1.f },
+    { "autolevel_db","Auto-Level Target",-30.f,  -12.f,   -20.f, "dB", 1.f },
+    { "dyneq_hz",    "Dynamic EQ Freq",   500.f,  9000.f,  3000.f,"Hz",0.5f },
+    { "dyneq_amount","Dynamic EQ Amount", 0.f,    1.f,     0.f,  "",   1.f },
+    { "dyneq_thresh","Dynamic EQ Threshold",-60.f,0.f,    -30.f, "dB", 1.f },
+    { "unmask",      "Sidechain Unmask",  0.f,    1.f,     0.f,  "",   1.f },
+    { "bandlimit",   "Band-Limit (phone)",0.f,    1.f,     0.f,  "",   1.f },
 };
 
 inline constexpr const char* kStyleId = "style";
@@ -81,6 +103,12 @@ inline constexpr const char* kDlModeId = "dl_mode";
 inline constexpr const char* kDlDivId = "dl_div";
 inline constexpr const char* kBypassId = "bypass";
 inline constexpr const char* kLevelMatchId = "level_match";
+inline constexpr const char* kKeyId = "key";
+inline constexpr const char* kScaleId = "scale";
+inline constexpr const char* kHarm1Id = "harm1";
+inline constexpr const char* kHarm2Id = "harm2";
+inline constexpr const char* kAutoLevelId = "autolevel";
+inline constexpr const char* kAdlibId = "adlib";
 
 inline juce::StringArray styleNames() {
     juce::StringArray s; for (int i = 0; i < 9; ++i) s.add(vonox::engine::styleName(static_cast<vonox::engine::Style>(i))); return s;
@@ -88,6 +116,9 @@ inline juce::StringArray styleNames() {
 inline juce::StringArray satModeNames() { return { "Clean", "Warm", "Analog", "Aggressive", "Tube", "Tape", "Soft Clip" }; }
 inline juce::StringArray rvModeNames() { return { "Room", "Plate", "Hall", "Chamber" }; }
 inline juce::StringArray dlModeNames() { return { "Stereo (sync)", "Slapback", "Ping-Pong" }; }
+inline juce::StringArray keyNames() { return { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" }; }
+inline juce::StringArray scaleNames() { return { "Chromatic", "Major", "Minor", "Harmonic Minor", "Pentatonic Major", "Pentatonic Minor", "Blues" }; }
+inline juce::StringArray harmNames() { return { "Off", "3rd up", "3rd down", "5th up", "5th down", "6th up", "Octave up", "Octave down" }; }
 inline juce::StringArray dlDivNames() { return { "1/16", "1/8 triplet", "1/8", "1/8 dotted", "1/4", "1/4 dotted", "1/2", "Free (ms)" }; }
 
 inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout() {
@@ -104,6 +135,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout() {
     l.add(std::make_unique<AudioParameterChoice>(ParameterID{ kDlDivId, 1 }, "Delay Sync", dlDivNames(), 2));
     l.add(std::make_unique<AudioParameterBool>(ParameterID{ kBypassId, 1 }, "Bypass", false));
     l.add(std::make_unique<AudioParameterBool>(ParameterID{ kLevelMatchId, 1 }, "Level Match", false));
+    l.add(std::make_unique<AudioParameterChoice>(ParameterID{ kKeyId, 1 }, "Key", keyNames(), 0));
+    l.add(std::make_unique<AudioParameterChoice>(ParameterID{ kScaleId, 1 }, "Scale", scaleNames(), 0));
+    l.add(std::make_unique<AudioParameterChoice>(ParameterID{ kHarm1Id, 1 }, "Harmony 1", harmNames(), 1));
+    l.add(std::make_unique<AudioParameterChoice>(ParameterID{ kHarm2Id, 1 }, "Harmony 2", harmNames(), 3));
+    l.add(std::make_unique<AudioParameterBool>(ParameterID{ kAutoLevelId, 1 }, "Auto-Level", false));
+    l.add(std::make_unique<AudioParameterBool>(ParameterID{ kAdlibId, 1 }, "Ad-Lib Mode", false));
     return l;
 }
 
@@ -111,10 +148,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout() {
 struct Cache {
     std::array<std::atomic<float>*, kNumFloats> f{};
     std::atomic<float>* satMode = nullptr; std::atomic<float>* rvMode = nullptr; std::atomic<float>* dlMode = nullptr; std::atomic<float>* dlDiv = nullptr; std::atomic<float>* bypass = nullptr; std::atomic<float>* levelMatch = nullptr;
+    std::atomic<float>* key = nullptr; std::atomic<float>* scale = nullptr; std::atomic<float>* harm1 = nullptr; std::atomic<float>* harm2 = nullptr; std::atomic<float>* autoLevel = nullptr; std::atomic<float>* adlib = nullptr;
     void bind(juce::AudioProcessorValueTreeState& s) {
         for (int i = 0; i < kNumFloats; ++i) f[i] = s.getRawParameterValue(kFloats[i].id);
         rvMode = s.getRawParameterValue(kRvModeId); dlMode = s.getRawParameterValue(kDlModeId); dlDiv = s.getRawParameterValue(kDlDivId);
         satMode = s.getRawParameterValue(kSatModeId); bypass = s.getRawParameterValue(kBypassId); levelMatch = s.getRawParameterValue(kLevelMatchId);
+        key = s.getRawParameterValue(kKeyId); scale = s.getRawParameterValue(kScaleId); harm1 = s.getRawParameterValue(kHarm1Id); harm2 = s.getRawParameterValue(kHarm2Id);
+        autoLevel = s.getRawParameterValue(kAutoLevelId); adlib = s.getRawParameterValue(kAdlibId);
     }
     float get(int i) const { return f[i]->load(std::memory_order_relaxed); }
 };
@@ -139,6 +179,20 @@ inline vonox::engine::MixSettings toSettings(const Cache& c) {
     m.delayAmount = c.get(dlAmount); m.delayMs = c.get(dlMs); m.delayFeedback = c.get(dlFb); m.delayHp = c.get(dlHp); m.delayLp = c.get(dlLp);
     m.doublerAmount = c.get(doubler); m.chorusAmount = c.get(chorus); m.duck = c.get(duck); m.width = c.get(width) / 100.0;
     return m;
+}
+
+inline int choiceOf(const std::atomic<float>* a, int n) { return juce::jlimit(0, n - 1, int(a->load(std::memory_order_relaxed) + 0.5f)); }
+
+inline vonox::engine::VoiceSettings toVoice(const Cache& c) {
+    vonox::engine::VoiceSettings v;
+    v.inputGainDb = c.get(inputGain); v.autoLevel = c.autoLevel->load(std::memory_order_relaxed) > 0.5f; v.autoLevelDb = c.get(autoLevelTarget);
+    v.nr = c.get(nrAmount); v.plosive = c.get(plosiveAmount); v.breath = c.get(breathAmount);
+    auto& p = v.pitch; p.amount = c.get(tune) / 100.0; p.retuneMs = c.get(retune); p.humanize = c.get(humanize);
+    p.key = choiceOf(c.key, 12); p.scale = choiceOf(c.scale, 7); p.harm1 = choiceOf(c.harm1, 8); p.harm2 = choiceOf(c.harm2, 8);
+    p.harm1Gain = c.get(harm1Gain); p.harm2Gain = c.get(harm2Gain); p.octDown = c.get(octDown); p.octUp = c.get(octUp);
+    v.dynEqHz = c.get(dynEqHz); v.dynEqAmount = c.get(dynEqAmount); v.dynEqThreshDb = c.get(dynEqThresh);
+    v.unmask = c.get(unmask); v.adlib = c.adlib->load(std::memory_order_relaxed) > 0.5f; v.bandLimit = c.get(bandLimit);
+    return v;
 }
 
 // Values to write into the parameters for a MixSettings (mix / output / compress are not part of it).

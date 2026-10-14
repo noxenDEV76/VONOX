@@ -1,14 +1,19 @@
-## VONOX 0.2.0: the effects release
+## VONOX 0.3.0: the voice release
 
-0.1.0 only corrected the vocal, so it sounded dry. This version adds the missing space and colour.
+0.2.0 added space and colour. 0.3.0 adds the voice tools that were missing.
 
 **New**
-- Reverb (Room, Plate, Hall, Chamber), delay (tempo-synced, slapback, ping-pong), doubler, chorus, mono-safe stereo width
-- Harmonic exciter, tube / tape / soft-clip saturation, parallel compression
-- SPACE, CHARACTER and WIDTH macros, plus an ADVANCED panel with every parameter
-- 72 presets, each a different configuration; AUTO MIX now sets the effects from your recording
-- A fresh instance starts from a finished sound instead of a dry default
+- **TUNE**: automatic pitch correction (key and scale aware, retune speed, humanize).
+- **Harmonizer** with 2 in-key voices, **octave** up / down.
+- **Noise reduction**, **plosive control**, **breath control**, **input gain**, **auto-level**.
+- **Sidechain unmasking** (optional sidechain input), **dynamic EQ** cut band, **telephone band-limit**, **AD-LIB MODE**.
+- **Reference tone match** (load a file, AUTO MIX moves presence / air / low-mid toward it).
+- AUTO MIX now also detects the **key** you sing in, and sets noise reduction / plosive control when the analysis calls for it.
+- **Look-ahead true-peak limiter** and a true-peak readout; 2x oversampled saturation; K-weighted LEVEL MATCH.
+- **81 presets sorted by artist** (US Rap, US Female Rap, French Rap, French Female) plus 34 styles and 9 Vocal FX, in a new black preset browser. Save your own presets.
 
-**Install:** run `VONOX-Setup.exe`, then in FL Studio *Options → Manage plugins → Find installed plugins*. (Not code-signed, so SmartScreen may warn.) `VONOX-VST3-windows.zip` has the bare `VONOX.vst3`.
+**Changed**
+- The plugin now has a constant latency of about 43 ms, reported to the host. Bypass is sample-aligned with the processed signal.
+- LOW-MID moved from the front panel to ADVANCED; TUNE took its place.
 
-**Straight talk:** tested with automated tests on synthetic signals; not yet listening-tested on real voices or validated in a DAW. Not built yet: pitch correction, harmonizer/octave, noise reduction, breath/plosive control, key detection. AGPLv3.
+**Honest status**: see docs/STATUS.md. Automated tests on synthetic signals pass; no listening tests and no DAW test by the author. Pitch, harmony, noise reduction, breath and sidechain features are experimental. Artist names are creative references only, not endorsed.

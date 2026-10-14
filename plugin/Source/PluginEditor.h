@@ -59,9 +59,42 @@ public:
     void resized() override { vp.setBounds(getLocalBounds().reduced(10, 34)); }
 private:
     VonoxProcessor& proc; juce::Image bg; juce::Viewport vp;
-    struct Content : public juce::Component { void paint(juce::Graphics&) override; std::vector<std::pair<juce::String, juce::Rectangle<int>>> heads; } content;
+    struct Content : public juce::Component { void paint(juce::Graphics&) override; std::vector<std::pair<juce::String, juce::Rectangle<int>>> heads, labels; } content;
+    std::vector<std::unique_ptr<juce::ToggleButton>> toggles; std::vector<std::unique_ptr<juce::ButtonParameterAttachment>> tAtt;
+    std::vector<std::unique_ptr<juce::TextButton>> buttons; std::unique_ptr<juce::FileChooser> chooser;
     std::vector<std::unique_ptr<MiniKnob>> knobs; std::vector<std::unique_ptr<juce::ComboBox>> combos;
     std::vector<std::unique_ptr<juce::SliderParameterAttachment>> kAtt; std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> cAtt;
+};
+
+
+// Full-window preset browser: black panel, white artist names grouped in categories, tiny white particles drifting in the background.
+class PresetBrowser : public juce::Component, private juce::Timer {
+public:
+    explicit PresetBrowser(VonoxProcessor&);
+    ~PresetBrowser() override { stopTimer(); }
+    void open() { refresh(); setVisible(true); toFront(true); startTimerHz(30); }
+    void close() { setVisible(false); stopTimer(); }
+    void paint(juce::Graphics&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override { hoverRow = hoverCat = -1; repaint(); }
+    void mouseDown(const juce::MouseEvent&) override;
+    void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    bool keyPressed(const juce::KeyPress&) override;
+    std::function<void()> onPicked;
+private:
+    struct Row { juce::String title, sub; int program = -1; juce::String user; bool isSave = false; };
+    void timerCallback() override;
+    void refresh();
+    void rebuildRows();
+    juce::Rectangle<int> panel() const { return getLocalBounds().withSizeKeepingCentre(700, 520); }
+    juce::Rectangle<int> catArea() const { return panel().withTrimmedTop(70).withWidth(190).withTrimmedBottom(14); }
+    juce::Rectangle<int> listArea() const { return panel().withTrimmedTop(70).withTrimmedLeft(200).withTrimmedBottom(14).withTrimmedRight(10); }
+    int rowH = 46;
+    VonoxProcessor& proc;
+    juce::StringArray cats; int selCat = 0, hoverCat = -1, hoverRow = -1; float scroll = 0.f;
+    std::vector<Row> rows;
+    struct P { float x, y, vy, vx, a, size, ph; };
+    std::vector<P> parts; juce::Random rng;
 };
 
 class VonoxEditor : public juce::AudioProcessorEditor, private juce::Timer {
@@ -70,10 +103,11 @@ public:
     ~VonoxEditor() override;
     void paint(juce::Graphics&) override;
     void mouseUp(const juce::MouseEvent&) override;
+    void showBrowser(bool on) { if (on) browser->open(); else browser->close(); }
     void showAdvanced(bool on) { adv->setVisible(on); advBtn.setToggleState(on, juce::dontSendNotification); }
 private:
     void timerCallback() override;
-    void showPresetMenu();
+    void showPresetMenu() { browser->open(); }
     void cycleStyle(int dir);
     static juce::Image res(const char* name);
 
@@ -82,7 +116,7 @@ private:
     std::vector<std::unique_ptr<VonoxKnob>> knobs;
     std::vector<std::unique_ptr<juce::SliderParameterAttachment>> knobAtt;
     VonoxKnob* mixKnob = nullptr;
-    SpriteButton bypassBtn, aBtn, bBtn, levelBtn, advBtn; std::unique_ptr<AdvancedPanel> adv; AutoMixButton autoBtn;
+    SpriteButton bypassBtn, aBtn, bBtn, levelBtn, advBtn; std::unique_ptr<AdvancedPanel> adv; std::unique_ptr<PresetBrowser> browser; AutoMixButton autoBtn;
     std::unique_ptr<juce::ButtonParameterAttachment> bypassAtt, levelAtt;
     juce::ParameterAttachment* dummy = nullptr;
 

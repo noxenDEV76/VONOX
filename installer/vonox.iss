@@ -4,7 +4,7 @@
 #endif
 [Setup]
 AppName=VONOX
-AppVersion=0.1.0
+AppVersion=0.3.0
 AppPublisher=VONOX
 DefaultDirName={commoncf64}\VST3
 DisableDirPage=yes

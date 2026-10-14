@@ -21,18 +21,20 @@ You record a take, and then comes the hour of fiddling: EQ here, compressor ther
 
 Hit **AUTO MIX** while your vocal plays. VONOX measures it (levels, dynamics, noise, boxiness, harshness, sibilance) and sets every stage, reverb and delay included, for the vocal profile you picked. Then you tweak, or you don't.
 
-No cloud, no account, no neural network. It's measurements and carefully tuned rules, running on your CPU with **zero latency**.
+No cloud, no account, no neural network: "AI" here means measurement-driven automatic setup. Everything runs on your CPU. The plugin has a fixed latency of about 43 ms (it is reported to your DAW, and bypass stays aligned).
 
 ## What you get
 
-- **AUTO MIX**: analyses your actual vocal and writes the whole chain, effects included. Your voice, not a generic preset.
-- **Space and colour, not just correction**: 4 reverbs (Room, Plate, Hall, Chamber), 3 delays (tempo-synced, slapback, ping-pong), a vocal doubler, chorus, stereo width (bass stays mono), a harmonic exciter, tube / tape / soft-clip saturation and parallel compression. Reverb and delay run on their own wet paths and duck under the vocal.
-- **72 factory presets** in three groups: Universal, US-rap-inspired, French-rap-inspired. Every one is a different configuration (a test checks it).
-- **9 vocal profiles**: Clean Studio, Modern Rap, Melodic Rap, Aggressive Rap, Drill, Trap, R&B, Pop, Custom.
-- **Macro knobs**: MIX AMOUNT, SPACE, CHARACTER, WIDTH, COMPRESS, OUTPUT. **ADVANCED** opens every module parameter.
-- **A/B slots**, **BYPASS** (smooth 10 ms crossfade) and **LEVEL MATCH**, so you judge the sound and not the volume.
-- **Live meters**: input, output, gain reduction.
+- **AUTO MIX**: analyses your actual vocal and writes the whole chain, effects included. It also notices a noisy recording, picks up the key you sing in, and can match the tone of a reference track.
+- **81 presets, sorted by artist**: US Rap, US Female Rap, French Rap, French Female, 34 general styles and 9 Vocal FX (autotune, robotic, octave and natural harmonies, telephone...). The preset browser is black with white names; you can save your own too.
+- **Pitch**: automatic **TUNE** (key and scale aware, from natural to hard autotune), two **harmony voices** in key, **octave** up and down.
+- **Clean-up**: noise reduction, plosive control, breath control, input gain and auto-level.
+- **Space and colour**: 4 reverbs, 3 delays (tempo-synced, slapback, ping-pong), doubler, chorus, stereo width, harmonic exciter, 7 saturation types (oversampled), parallel compression.
+- **Sidechain unmasking**: send your beat to the plugin and the vocal finds its place.
+- **Safe output**: look-ahead true-peak limiter, live meters, true-peak readout, A/B slots, BYPASS (sample-aligned), LEVEL MATCH.
 - **The look**: scratched steel, chains, flames. It's a machine, it should look like one.
+
+![Preset browser](docs/vonox_presets_menu.png)
 
 ## Install
 
@@ -46,19 +48,19 @@ Windows might show a SmartScreen warning: the installer isn't code-signed yet.
 
 1. Put VONOX on your vocal track.
 2. Play 3 to 15 seconds of the vocal and press **AUTO MIX**.
-3. Pick a profile with ◀ ▶, or click the profile name to open the presets.
-4. Adjust **MIX AMOUNT** and **COMPRESS** to taste. Use **A/B** to compare, **LEVEL MATCH** to stay honest.
+3. Pick a profile with ◀ ▶, or click the profile name to open the preset browser (↑ ↓ swipe through the list).
+4. Adjust **MIX AMOUNT** and **COMPRESS** to taste. **TUNE** is the pitch correction amount; KEY / SCALE and the harmonies are in **ADVANCED**. Use **A/B** to compare, **LEVEL MATCH** to stay honest.
 
 ## Straight talk
 
-This is an early release. Here's what's true today:
+This is still a young plugin. The full, line-by-line status is in [docs/STATUS.md](docs/STATUS.md). The short version:
 
-- The DSP, the analysis and the plugin logic are covered by automated tests on synthetic signals, and Windows and Linux builds are green on GitHub Actions.
-- **I haven't done listening tests on real voices yet** and I haven't loaded it in a DAW myself. The presets are starting points: tune them by ear.
-- **Not built yet** (so no control for them, nothing pretends): pitch correction / TUNE, key detection, harmonizer and octave, noise reduction, breath and plosive control, sidechain unmasking, separate ad-lib processing, reference tonal analysis, true-peak metering.
-- Saturation isn't oversampled, so very high drive can alias a little. The limiter is a sample-peak one, not true-peak lookahead.
-- Fixed window size (1100×700). Windows VST3 only for now.
-- The artist-inspired preset groups are *tonal directions with descriptive names*, not copies of anyone's chain, and not endorsed by anyone. See [docs/PRESETS.md](docs/PRESETS.md).
+- Every DSP module is covered by automated tests on synthetic signals (tones, noise, bursts), measured on the real output, and the Windows and Linux builds are green on GitHub Actions.
+- **Nobody has done listening tests on real voices yet, and I haven't loaded VONOX in FL Studio myself.** The presets are starting points: tune them by ear. A 20 minute checklist is in [docs/LISTENING_TESTS.md](docs/LISTENING_TESTS.md): if you try it, please open an issue with what you hear.
+- **Experimental**: pitch correction, harmonies and octaves (PSOLA: can warble on breathy or very low voices; octave down is a sub-octave synth, not a second voice), noise reduction (steady noise only), breath control, key detection, sidechain unmasking.
+- **Partial**: dynamic EQ has one cut band; AD-LIB MODE is a role switch, not a separate processor; the reference match is a coarse 3-band tone match; LEVEL MATCH is K-weighted, **not** a certified LUFS meter.
+- **Missing**: real LUFS meter, formant control, spectrum display, resizable window, macOS / Linux binaries, code signing.
+- The artist names are **creative references only**: original tonal directions, not their chains, not endorsed by anyone, not their voices. See [docs/PRESETS.md](docs/PRESETS.md).
 
 Found a bug or a preset that sounds off? Open an issue, that's exactly the feedback this version needs.
 

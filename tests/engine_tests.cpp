@@ -87,6 +87,16 @@ int main() {
     CHECK(half.fetRatio > zero.fetRatio && half.fetRatio < one.fetRatio &&
           half.lowMidCutDb < zero.lowMidCutDb && half.lowMidCutDb > one.lowMidCutDb, "MIX 50% sits between 0% and 100%");
 
+    { // reference tonal match: brighter reference -> more presence/air, limited to +/-3 dB * 0.8; identical reference -> unchanged
+        VocalProfile own, ref; own.valid = ref.valid = true; own.presenceDb = -22; own.airDb = -40; own.lowMidDb = -12; ref = own;
+        MixSettings base = VocalMixEngine::compute(own, Style::ModernRap), same = base; VocalMixEngine::applyReference(same, own, ref);
+        CHECK(same.presenceDb == base.presenceDb && same.airDb == base.airDb && same.lowMidCutDb == base.lowMidCutDb, "Reference identical to the input changes nothing");
+        VocalProfile bright = own; bright.presenceDb += 10; bright.airDb += 10; MixSettings m = base; VocalMixEngine::applyReference(m, own, bright);
+        CHECK(m.presenceDb >= base.presenceDb && m.presenceDb - base.presenceDb <= 2.41 && m.airDb - base.airDb <= 2.41 && m.presenceDb + m.airDb > base.presenceDb + base.airDb,
+              "Brighter reference adds presence/air, each change limited to 2.4 dB");
+        VocalProfile boomy = own; boomy.lowMidDb += 8; MixSettings m2 = base; m2.lowMidCutDb = -4; VocalMixEngine::applyReference(m2, own, boomy);
+        CHECK(m2.lowMidCutDb > -4.0, "Reference with more low-mids reduces the low-mid cut");
+    }
     std::printf("\n%s (%d failure%s)\n", failures ? "TESTS FAILED" : "ALL TESTS PASSED",
                 failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;

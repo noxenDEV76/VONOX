@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "Params.h"
 #include "Presets.h"
 #include "engine/VocalChain.h"
@@ -29,7 +30,7 @@ public:
     void setCurrentProgram(int i) override { applyPreset(i); }
     const juce::String getProgramName(int i) override {
         const auto& p = vonox::factoryPresets();
-        return (i >= 0 && i < int(p.size())) ? juce::String(p[size_t(i)].category) + " / " + p[size_t(i)].name : juce::String();
+        return (i >= 0 && i < int(p.size())) ? juce::String(p[size_t(i)].category) + " / " + vonox::displayName(p[size_t(i)]) : juce::String();
     }
     void changeProgramName(int, const juce::String&) override {}
 
@@ -42,6 +43,16 @@ public:
     juce::String analysisText() const;          // last AUTO MIX result (thread-safe copy)
     bool analysisBusy() const { return busy.load(); }
     int  autoMixCounter() const { return autoMixDone.load(); }   // increments on every completed AUTO MIX
+    // reference tonal match (file analysed off the audio thread; AUTO MIX then moves presence/air/low-mid toward it)
+    void loadReference(const juce::File& f);
+    void clearReference();
+    juce::String referenceName() const;
+    // user presets: plain XML files in the user's application-data folder
+    juce::File userPresetDir() const;
+    juce::StringArray userPresetNames() const;
+    bool saveUserPreset(const juce::String& name);
+    bool loadUserPreset(const juce::String& name);
+    juce::String keyText() const;               // "A minor (conf 0.87)" from the pitch histogram, or "" when there is not enough evidence
     void switchAB(int slot);                    // 0 = A, 1 = B
     int  activeSlot() const { return slot; }
     float capturedSeconds() const;
@@ -63,6 +74,7 @@ private:
     std::atomic<int> autoMixDone{0};
     mutable juce::CriticalSection textLock; juce::String lastText = "Play your vocal, then press AUTO MIX.";
     juce::ThreadPool pool{1};
+    mutable juce::CriticalSection refLock; vonox::engine::VocalProfile refProfile; juce::String refPath, refLabel;
 
     int currentProgram = 0, slot = 0;
     std::unique_ptr<juce::XmlElement> slotState[2];

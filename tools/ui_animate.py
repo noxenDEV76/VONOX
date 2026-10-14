@@ -322,8 +322,8 @@ vonox_mask = metal_label((550, 58), "VONOX", 46, glow_col=None, base=225)
 for px, py in [(262, 24), (838, 24), (262, 92), (838, 92)]: screw(px, py, 4.5)
 
 # SIDE PANELS
-panel(18, 118, 255, 330, title="TONE")
-knob(80, 215, "LOW-MID", 0.35); knob(211, 215, "PRESENCE", 0.62, accent=VIOLET)
+panel(18, 118, 255, 330, title="VOICE")
+knob(80, 215, "TUNE", 0.0); knob(211, 215, "PRESENCE", 0.62, accent=VIOLET)
 knob(80, 360, "AIR", 0.55, accent=VIOLET); knob(211, 360, "WARMTH", 0.4)
 panel(827, 118, 255, 330, title="SPACE")
 knob(889, 215, "SPACE", 0.5); knob(1020, 215, "CHARACTER", 0.5, accent=VIOLET)

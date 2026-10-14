@@ -154,6 +154,21 @@ public:
         m.duck = 0.55;
     }
 
+
+    // REFERENCE TONAL MATCH: moves the tonal controls toward the band balance of a reference recording.
+    // Only 4 measured band energies are compared (150-450 Hz, 2-5 kHz, 10-16 kHz, plus level-independent by construction);
+    // each correction is limited to +/-3 dB and applied at 80 %, so a reference can never push the chain to extremes.
+    // It matches coarse tonal balance only - it is NOT a full spectral match and not a loudness match.
+    static void applyReference(MixSettings& m, const VocalProfile& own, const VocalProfile& ref) {
+        if (!own.valid || !ref.valid) return;
+        auto lim = [](double d) { return std::clamp(d, -3.0, 3.0) * 0.8; };
+        m.presenceDb = std::clamp(m.presenceDb + lim(ref.presenceDb - own.presenceDb), 0.0, 8.0);
+        m.airDb = std::clamp(m.airDb + lim(ref.airDb - own.airDb), 0.0, 8.0);
+        const double low = lim(ref.lowMidDb - own.lowMidDb);        // reference has more low-mids than the input -> less cut / more warmth
+        if (low < 0) m.lowMidCutDb = std::clamp(m.lowMidCutDb + low, -8.0, 0.0); else { m.lowMidCutDb = std::clamp(m.lowMidCutDb + low, -8.0, 0.0); m.warmthDb = std::clamp(m.warmthDb + 0.5 * low, -4.0, 6.0); }
+        if (low < 0) m.warmthDb = std::clamp(m.warmthDb + 0.5 * low, -4.0, 6.0);
+    }
+
     // MIX AMOUNT (0..1): scales each stage in its own way instead of dry/wet crossfading
     // (a crossfade through a non-linear-phase chain causes comb filtering).
     //  - EQ gains scale linearly (amount * gain), frequencies stay fixed.
