@@ -90,6 +90,7 @@ VonoxEditor::VonoxEditor(VonoxProcessor& p)
 VonoxEditor::~VonoxEditor() { stopTimer(); }
 
 void VonoxEditor::cycleStyle(int dir) {
+    proc.presetActive = false;
     if (auto* par = proc.apvts.getParameter(params::kStyleId)) {
         const int n = 9, cur = juce::roundToInt(par->convertFrom0to1(par->getValue())), nx = (cur + dir + n) % n;
         par->beginChangeGesture(); par->setValueNotifyingHost(par->convertTo0to1(float(nx))); par->endChangeGesture();
@@ -161,6 +162,10 @@ void VonoxEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(16.f, juce::Font::bold));
     g.drawText(juce::String(engine::styleName(static_cast<engine::Style>(juce::jlimit(0, 8, si)))).toUpperCase(), styleBox.reduced(26, 0), juce::Justification::centred);
     g.drawText(juce::CharPointer_UTF8("\xe2\x97\x80"), leftArrow, juce::Justification::centred); g.drawText(juce::CharPointer_UTF8("\xe2\x96\xb6"), rightArrow, juce::Justification::centred);
+    if (proc.presetActive.load()) {
+        g.setColour(juce::Colour(255, 120, 170)); g.setFont(juce::FontOptions(11.f, juce::Font::bold));
+        g.drawFittedText(juce::String(factoryPresets()[size_t(proc.getCurrentProgram())].name).toUpperCase(), 446, 232, 208, 18, juce::Justification::centred, 1);
+    }
     g.setColour(pink); g.setFont(juce::FontOptions(13.f, juce::Font::bold));
     g.drawText("MIX AMOUNT", 450, 262, 200, 18, juce::Justification::centred);
     const juce::String pct = juce::String(juce::roundToInt(mixKnob->getValue())) + " %";

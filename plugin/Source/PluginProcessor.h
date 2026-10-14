@@ -49,7 +49,7 @@ public:
     void setParam(const char* id, float plain);
     juce::AudioProcessorValueTreeState apvts;
     vonox::engine::VocalChain chain;
-    juce::Atomic<bool> dummy;
+    std::atomic<bool> presetActive{false};   // true right after a preset was applied (cleared when the style is changed by hand / AUTO MIX)
 
 private:
     JUCE_DECLARE_WEAK_REFERENCEABLE(VonoxProcessor)
