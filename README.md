@@ -19,16 +19,17 @@ Built for rap, melodic, drill, trap, R&B and pop vocals. VST3, Windows.
 
 You record a take, and then comes the hour of fiddling: EQ here, compressor there, de-esser, a bit of saturation, limiter, and still it doesn't sit right. VONOX does that first pass for you.
 
-Hit **AUTO MIX** while your vocal plays. VONOX measures it (levels, dynamics, noise, boxiness, harshness, sibilance) and sets every stage for the vocal profile you picked. Then you tweak, or you don't.
+Hit **AUTO MIX** while your vocal plays. VONOX measures it (levels, dynamics, noise, boxiness, harshness, sibilance) and sets every stage, reverb and delay included, for the vocal profile you picked. Then you tweak, or you don't.
 
 No cloud, no account, no neural network. It's measurements and carefully tuned rules, running on your CPU with **zero latency**.
 
 ## What you get
 
-- **AUTO MIX**: analyses your actual vocal and writes the settings. Your voice, not a generic preset.
-- **34 factory presets** in three groups: Universal, US-rap-inspired, French-rap-inspired. Swipe through them with the profile box in the middle of the machine.
+- **AUTO MIX**: analyses your actual vocal and writes the whole chain, effects included. Your voice, not a generic preset.
+- **Space and colour, not just correction**: 4 reverbs (Room, Plate, Hall, Chamber), 3 delays (tempo-synced, slapback, ping-pong), a vocal doubler, chorus, stereo width (bass stays mono), a harmonic exciter, tube / tape / soft-clip saturation and parallel compression. Reverb and delay run on their own wet paths and duck under the vocal.
+- **72 factory presets** in three groups: Universal, US-rap-inspired, French-rap-inspired. Every one is a different configuration (a test checks it).
 - **9 vocal profiles**: Clean Studio, Modern Rap, Melodic Rap, Aggressive Rap, Drill, Trap, R&B, Pop, Custom.
-- **MIX AMOUNT**: dials the *intensity of every stage* up or down (not a dry/wet fader), so 50 % is a lighter mix, not a blend with the raw take.
+- **Macro knobs**: MIX AMOUNT, SPACE, CHARACTER, WIDTH, COMPRESS, OUTPUT. **ADVANCED** opens every module parameter.
 - **A/B slots**, **BYPASS** (smooth 10 ms crossfade) and **LEVEL MATCH**, so you judge the sound and not the volume.
 - **Live meters**: input, output, gain reduction.
 - **The look**: scratched steel, chains, flames. It's a machine, it should look like one.
@@ -50,13 +51,12 @@ Windows might show a SmartScreen warning: the installer isn't code-signed yet.
 
 ## Straight talk
 
-This is an early release (0.1.0). Here's what's true today:
+This is an early release. Here's what's true today:
 
-- The DSP, the analysis and the plugin logic are covered by automated tests, run on synthetic signals. Windows and Linux builds are green on GitHub Actions.
-- **I haven't done listening tests on real voices yet**, and the presets are starting points: tune them by ear.
-- Saturation isn't oversampled yet, so very high drive can alias a little.
-- The limiter is a simple sample-peak one, not a true-peak lookahead.
-- No pitch correction. It's not part of VONOX and nothing here pretends otherwise.
+- The DSP, the analysis and the plugin logic are covered by automated tests on synthetic signals, and Windows and Linux builds are green on GitHub Actions.
+- **I haven't done listening tests on real voices yet** and I haven't loaded it in a DAW myself. The presets are starting points: tune them by ear.
+- **Not built yet** (so no control for them, nothing pretends): pitch correction / TUNE, key detection, harmonizer and octave, noise reduction, breath and plosive control, sidechain unmasking, separate ad-lib processing, reference tonal analysis, true-peak metering.
+- Saturation isn't oversampled, so very high drive can alias a little. The limiter is a sample-peak one, not true-peak lookahead.
 - Fixed window size (1100×700). Windows VST3 only for now.
 - The artist-inspired preset groups are *tonal directions with descriptive names*, not copies of anyone's chain, and not endorsed by anyone. See [docs/PRESETS.md](docs/PRESETS.md).
 

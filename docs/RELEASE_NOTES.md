@@ -1,10 +1,14 @@
-## VONOX 0.1.0 — first public build
+## VONOX 0.2.0: the effects release
 
-Press **AUTO MIX** on your vocal and VONOX sets the whole chain for you: EQ, FET compressor, opto leveler, resonance control, de-esser, tone, saturation and limiter. 34 presets, A/B, bypass, level match, live meters, zero latency.
+0.1.0 only corrected the vocal, so it sounded dry. This version adds the missing space and colour.
 
-**Install:** download `VONOX-Setup.exe`, run it, then in FL Studio go to *Options → Manage plugins → Find installed plugins*. (No code signature yet, so Windows SmartScreen may warn.)
-Prefer manual? `VONOX-VST3-windows.zip` contains `VONOX.vst3` for `C:\Program Files\Common Files\VST3`.
+**New**
+- Reverb (Room, Plate, Hall, Chamber), delay (tempo-synced, slapback, ping-pong), doubler, chorus, mono-safe stereo width
+- Harmonic exciter, tube / tape / soft-clip saturation, parallel compression
+- SPACE, CHARACTER and WIDTH macros, plus an ADVANCED panel with every parameter
+- 72 presets, each a different configuration; AUTO MIX now sets the effects from your recording
+- A fresh instance starts from a finished sound instead of a dry default
 
-**Straight talk:** early release. Tested with automated tests on synthetic signals and built on GitHub Actions; not yet listening-tested on real voices or validated in a DAW. Presets are starting points. Saturation isn't oversampled yet; the limiter is sample-peak. Windows VST3 only. Licensed AGPLv3.
+**Install:** run `VONOX-Setup.exe`, then in FL Studio *Options → Manage plugins → Find installed plugins*. (Not code-signed, so SmartScreen may warn.) `VONOX-VST3-windows.zip` has the bare `VONOX.vst3`.
 
-Bugs and weird-sounding presets: open an issue.
+**Straight talk:** tested with automated tests on synthetic signals; not yet listening-tested on real voices or validated in a DAW. Not built yet: pitch correction, harmonizer/octave, noise reduction, breath/plosive control, key detection. AGPLv3.
