@@ -33,15 +33,6 @@ No cloud, no account, no neural network. It's measurements and carefully tuned r
 - **Live meters**: input, output, gain reduction.
 - **The look**: scratched steel, chains, flames. It's a machine, it should look like one.
 
-## The chain
-
-```
-Subtractive EQ → FET compressor → Opto leveler → Resonance control
-   → De-esser → Warmth / Presence / Air → Saturation → Output → Limiter
-```
-
-Every parameter behind the knobs is a real, automatable parameter. The ten big knobs are the macros; the fine ones (attack and release times, de-esser frequency, resonance threshold…) show up in your host's parameter list.
-
 ## Install
 
 1. Grab **`VONOX-Setup.exe`** from the [latest release](../../releases/latest).
