@@ -3,6 +3,8 @@ on:
   push: { branches: [main], tags: ['v*'] }
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag: { description: 'Create a GitHub release with this tag (e.g. v0.1.0); leave empty for a plain build', required: false, default: '' }
 permissions:
   contents: write
 jobs:
@@ -30,12 +32,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: VONOX-Setup, path: installer/Output/VONOX-Setup.exe }
       - name: Publish release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ github.event.inputs.release_tag != '' || startsWith(github.ref, 'refs/tags/v') }}
         shell: pwsh
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env: { GH_TOKEN: "${{ github.token }}", TAG: "${{ github.event.inputs.release_tag || github.ref_name }}" }
         run: |
           Compress-Archive -Path build\plugin\VONOX_artefacts\Release\VST3\VONOX.vst3 -DestinationPath VONOX-VST3-windows.zip
-          gh release create "${{ github.ref_name }}" installer\Output\VONOX-Setup.exe VONOX-VST3-windows.zip --title "VONOX ${{ github.ref_name }}" --notes-file docs/RELEASE_NOTES.md
+          gh release create $env:TAG installer\Output\VONOX-Setup.exe VONOX-VST3-windows.zip --target ${{ github.sha }} --title "VONOX $env:TAG" --notes-file docs/RELEASE_NOTES.md
   linux-check:
     runs-on: ubuntu-latest
     steps:
