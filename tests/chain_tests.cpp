@@ -41,11 +41,12 @@ int main() {
     const double sr = 48000.0;
     auto in = voice(sr, 4.0, 0.4);
 
-    { // 1. Bypass is bit-exact after the 10 ms fade (no latency, no coloration)
+    { // 1. Bypass is bit-exact after the 10 ms fade (input delayed by the reported latency, no coloration)
         VocalChain c; c.prepare(sr, 512); auto t = settingsFor(Style::AggressiveRap, in, sr); t.bypass = true;
         auto out = run(c, t, in, 256); bool exact = true;
-        for (size_t i = 4800; i < in.size(); ++i) if (out[i] != in[i]) { exact = false; break; }
-        CHECK(exact, "Bypass reproduces the input bit-exactly (after 10 ms fade)");
+        const size_t L = size_t(c.latency());
+        for (size_t i = 4800 + L; i < in.size(); ++i) if (out[i] != in[i - L]) { exact = false; break; }
+        CHECK(exact, "Bypass reproduces the input bit-exactly, delayed by exactly the reported latency (after 10 ms fade)");
     }
     { // 2. Heavy processing: finite, never above the ceiling, on a very loud input
         VocalChain c; c.prepare(sr, 512); auto loud = voice(sr, 4.0, 6.0);
