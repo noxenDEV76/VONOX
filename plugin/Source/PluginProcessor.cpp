@@ -71,7 +71,7 @@ void VonoxProcessor::applyPreset(int index) {
     writeValues(params::fromSettings(m));
     setParam("compress", float(pr.compress)); setParam("mix", float(pr.mix));
     setParam(params::kSatModeId, float(int(m.satMode)));
-    currentProgram = index;
+    currentProgram = index; presetActive = true;
 }
 
 void VonoxProcessor::runAutoMix() {
@@ -93,7 +93,7 @@ void VonoxProcessor::runAutoMix() {
                     p->setParam(params::kSatModeId, float(int(m.satMode)));
                     const juce::ScopedLock sl(p->textLock); p->lastText = juce::String(prof.summary());
                 } else { const juce::ScopedLock sl(p->textLock); p->lastText = juce::String(prof.note); }
-                p->autoMixDone++; p->busy = false;
+                p->presetActive = false; p->autoMixDone++; p->busy = false;
             }
         });
     });

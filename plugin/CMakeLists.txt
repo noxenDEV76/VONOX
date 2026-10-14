@@ -37,3 +37,12 @@ if(VONOX_BUILD_TESTS)
   target_compile_definitions(vonox_plugin_smoke PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1)
   add_test(NAME plugin_smoke COMMAND vonox_plugin_smoke)
 endif()
+
+if(VONOX_BUILD_TESTS)
+  # Offline recorder used to produce the demo video from the real plugin editor (not run by ctest).
+  juce_add_console_app(vonox_demo_render PRODUCT_NAME "vonox_demo_render")
+  target_sources(vonox_demo_render PRIVATE tests/demo_render.cpp Source/PluginProcessor.cpp Source/PluginEditor.cpp)
+  target_include_directories(vonox_demo_render PRIVATE Source)
+  target_link_libraries(vonox_demo_render PRIVATE vonox_dsp VonoxAssets juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+  target_compile_definitions(vonox_demo_render PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1)
+endif()

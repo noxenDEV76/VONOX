@@ -63,6 +63,21 @@ int main(int argc, char** argv) {
             std::printf("snapshot %s\n", f.getFullPathName().toRawUTF8());
         }
     }
+    // optional: frame dump for the README animation (arg 2 = number of presets to cycle)
+    if (argc > 2) {
+        std::unique_ptr<juce::AudioProcessorEditor> ed(p.createEditor());
+        const int picks[] = { 0, 4, 18, 24, 27, 13 }; int n = 0;
+        for (int pi : picks) {
+            p.applyPreset(pi);
+            for (int f = 0; f < 30; ++f) {
+                for (int k = 0; k < 4; ++k) { voice(buf, sr, t); p.processBlock(buf, midi); }
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(40);
+                auto img = ed->createComponentSnapshot(ed->getLocalBounds(), true, 1.0f);
+                juce::File fl = juce::File(argv[2]).getChildFile(juce::String::formatted("f%04d.png", n++)); fl.deleteFile();
+                juce::FileOutputStream fo(fl); juce::PNGImageFormat().writeImageToStream(img, fo);
+            }
+        }
+    }
     p.releaseResources();
     std::printf(fails ? "SMOKE FAILED (%d)\n" : "SMOKE PASSED\n", fails);
     return fails ? 1 : 0;
