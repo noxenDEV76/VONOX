@@ -8,6 +8,8 @@ VonoxProcessor::VonoxProcessor()
       apvts(*this, nullptr, "VONOX", params::createLayout()) {
     cache.bind(apvts);
     setLatencySamples(0);
+    applyPreset(0);          // a fresh instance starts from a finished, musical sound (not a dry default)
+    presetActive = false;
 }
 VonoxProcessor::~VonoxProcessor() { pool.removeAllJobs(true, 5000); }
 
@@ -49,6 +51,8 @@ void VonoxProcessor::processBlock(juce::AudioBuffer<float>& buf, juce::MidiBuffe
     t.outputDb = cache.get(params::output);
     t.bypass = cache.bypass->load(std::memory_order_relaxed) > 0.5f;
     t.levelMatch = cache.levelMatch->load(std::memory_order_relaxed) > 0.5f;
+    t.space = cache.get(params::space); t.character = cache.get(params::character);
+    if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) if (auto bpm = pos->getBpm()) t.bpm = *bpm;
     chain.setTarget(t);
     float* ch[2] = { buf.getWritePointer(0), nc > 1 ? buf.getWritePointer(1) : nullptr };
     chain.process(ch, nc, n);
@@ -69,6 +73,8 @@ void VonoxProcessor::applyPreset(int index) {
     auto m = applyCharacter(engine::VocalMixEngine::compute(typicalProfile(), pr.style), pr);
     setParam(params::kStyleId, float(int(pr.style)));
     writeValues(params::fromSettings(m));
+    setParam(params::kRvModeId, float(m.reverbMode)); setParam(params::kDlModeId, float(m.delayMode)); setParam(params::kDlDivId, float(m.delayDiv));
+    setParam("space", 0.5f); setParam("character", 0.5f);
     setParam("compress", float(pr.compress)); setParam("mix", float(pr.mix));
     setParam(params::kSatModeId, float(int(m.satMode)));
     currentProgram = index; presetActive = true;
@@ -91,6 +97,7 @@ void VonoxProcessor::runAutoMix() {
                     auto m = engine::VocalMixEngine::compute(prof, static_cast<engine::Style>(styleIdx));
                     p->writeValues(params::fromSettings(m));
                     p->setParam(params::kSatModeId, float(int(m.satMode)));
+                    p->setParam(params::kRvModeId, float(m.reverbMode)); p->setParam(params::kDlModeId, float(m.delayMode)); p->setParam(params::kDlDivId, float(m.delayDiv));
                     const juce::ScopedLock sl(p->textLock); p->lastText = juce::String(prof.summary());
                 } else { const juce::ScopedLock sl(p->textLock); p->lastText = juce::String(prof.note); }
                 p->presetActive = false; p->autoMixDone++; p->busy = false;

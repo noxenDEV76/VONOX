@@ -31,12 +31,46 @@ struct AutoMixButton : public juce::Button {
     bool busyFlag = false;
 };
 
+struct MiniKnob : public juce::Slider {
+    MiniKnob(const juce::String& n, const juce::String& u, int d, juce::Colour c) : label(n), unit(u), dec(d), accent(c) {
+        setSliderStyle(juce::Slider::RotaryVerticalDrag); setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+        setMouseDragSensitivity(160); setScrollWheelEnabled(true); setPopupMenuEnabled(false); }
+    void paint(juce::Graphics& g) override {
+        const float cx = getWidth() * 0.5f, cy = 20.f, r = 14.f;
+        const float norm = float(valueToProportionOfLength(getValue())), a0 = 225.f * 0.0174533f, a1 = a0 + 270.f * 0.0174533f * norm;
+        juce::Path tr; tr.addCentredArc(cx, cy, r + 3, r + 3, 0.f, a0, a0 + 270.f * 0.0174533f, true);
+        g.setColour(juce::Colours::black.withAlpha(0.7f)); g.strokePath(tr, juce::PathStrokeType(3.f));
+        if (norm > 0.001f) { juce::Path v; v.addCentredArc(cx, cy, r + 3, r + 3, 0.f, a0, a1, true); g.setColour(accent); g.strokePath(v, juce::PathStrokeType(3.f)); }
+        g.setColour(juce::Colour(205, 205, 215)); g.fillEllipse(cx - r, cy - r, 2 * r, 2 * r);
+        g.setColour(juce::Colour(40, 40, 50)); g.drawEllipse(cx - r, cy - r, 2 * r, 2 * r, 1.5f);
+        g.setColour(accent); g.drawLine(cx + std::sin(a1) * 4.f, cy - std::cos(a1) * 4.f, cx + std::sin(a1) * (r - 2), cy - std::cos(a1) * (r - 2), 2.5f);
+        g.setColour(juce::Colour(255, 205, 225)); g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+        g.drawText(juce::String(getValue(), dec) + (unit.isEmpty() ? "" : " " + unit), 0, 38, getWidth(), 13, juce::Justification::centred);
+        g.setColour(juce::Colours::white.withAlpha(0.85f)); g.setFont(juce::FontOptions(10.f));
+        g.drawFittedText(label, 2, 51, getWidth() - 4, 24, juce::Justification::centredTop, 2);
+    }
+    juce::String label, unit; int dec; juce::Colour accent;
+};
+
+class AdvancedPanel : public juce::Component {
+public:
+    AdvancedPanel(VonoxProcessor&, const juce::Image& bg);
+    void paint(juce::Graphics&) override;
+    void resized() override { vp.setBounds(getLocalBounds().reduced(10, 34)); }
+private:
+    VonoxProcessor& proc; juce::Image bg; juce::Viewport vp;
+    struct Content : public juce::Component { void paint(juce::Graphics&) override; std::vector<std::pair<juce::String, juce::Rectangle<int>>> heads; } content;
+    std::vector<std::unique_ptr<MiniKnob>> knobs; std::vector<std::unique_ptr<juce::ComboBox>> combos;
+    std::vector<std::unique_ptr<juce::SliderParameterAttachment>> kAtt; std::vector<std::unique_ptr<juce::ComboBoxParameterAttachment>> cAtt;
+};
+
 class VonoxEditor : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit VonoxEditor(VonoxProcessor&);
     ~VonoxEditor() override;
     void paint(juce::Graphics&) override;
     void mouseUp(const juce::MouseEvent&) override;
+    void showAdvanced(bool on) { adv->setVisible(on); advBtn.setToggleState(on, juce::dontSendNotification); }
 private:
     void timerCallback() override;
     void showPresetMenu();
@@ -48,7 +82,7 @@ private:
     std::vector<std::unique_ptr<VonoxKnob>> knobs;
     std::vector<std::unique_ptr<juce::SliderParameterAttachment>> knobAtt;
     VonoxKnob* mixKnob = nullptr;
-    SpriteButton bypassBtn, aBtn, bBtn, levelBtn; AutoMixButton autoBtn;
+    SpriteButton bypassBtn, aBtn, bBtn, levelBtn, advBtn; std::unique_ptr<AdvancedPanel> adv; AutoMixButton autoBtn;
     std::unique_ptr<juce::ButtonParameterAttachment> bypassAtt, levelAtt;
     juce::ParameterAttachment* dummy = nullptr;
 

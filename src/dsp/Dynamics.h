@@ -106,7 +106,7 @@ private:
 // Oversampling-free saturator with DC blocker (oversampling added in plugin phase).
 class Saturator {
 public:
-    enum class Mode { Clean, Warm, Analog, Aggressive };
+    enum class Mode { Clean, Warm, Analog, Aggressive, Tube, Tape, SoftClip };
     void prepare(double sr) { dcR = 1.0 - (2.0 * kPi * 10.0 / sr); x1 = y1 = 0.0; }
     void set(Mode m, double driveDb) { mode = m; drive = dbToLin(driveDb); }
     inline double process(double x) {
@@ -118,6 +118,9 @@ public:
         case Mode::Warm:       s = std::tanh(d + 0.1 * d * d) ; break;
         case Mode::Analog:     s = d / (1.0 + std::abs(d)); break;
         case Mode::Aggressive: s = std::clamp(d * 1.5, -1.0, 1.0); s = (s - s * s * s / 3.0) / 1.5; break;
+        case Mode::Tube:       s = std::tanh(d + 0.22 * d * d) ; break;                     // asymmetric: adds 2nd harmonic
+        case Mode::Tape:       { const double t = std::tanh(d * 0.85) / 0.85; tapeLp += 0.55 * (t - tapeLp); s = tapeLp; break; } // soft, highs rounded
+        case Mode::SoftClip:   s = (std::abs(d) <= 1.0) ? d - d * d * d / 3.0 : (d > 0 ? 2.0 / 3.0 : -2.0 / 3.0); break;
         default: s = d;
         }
         s /= std::max(1.0, drive); // keep level roughly constant
@@ -125,9 +128,9 @@ public:
         x1 = s; y1 = y;
         return y;
     }
-    void reset() { x1 = y1 = 0.0; }
+    void reset() { x1 = y1 = 0.0; tapeLp = 0.0; }
 private:
-    Mode mode = Mode::Clean; double drive = 1.0, dcR = 0.999, x1 = 0.0, y1 = 0.0;
+    Mode mode = Mode::Clean; double drive = 1.0, dcR = 0.999, x1 = 0.0, y1 = 0.0, tapeLp = 0.0;
 };
 
 } // namespace vonox::dsp

@@ -46,7 +46,8 @@ void VonoxKnob::paint(juce::Graphics& g) {
 VonoxEditor::VonoxEditor(VonoxProcessor& p)
     : AudioProcessorEditor(&p), proc(p),
       bypassBtn("bypass", res("btn_bypass_on_png"), res("btn_bypass_off_png")), aBtn("a", res("btn_a_on_png"), res("btn_a_off_png")),
-      bBtn("b", res("btn_b_on_png"), res("btn_b_off_png")), levelBtn("level", res("btn_level_on_png"), res("btn_level_off_png")) {
+      bBtn("b", res("btn_b_on_png"), res("btn_b_off_png")), levelBtn("level", res("btn_level_on_png"), res("btn_level_off_png")),
+      advBtn("adv", res("btn_adv_on_png"), res("btn_adv_off_png")) {
     background = res("background_png"); fireTitle = res("fire_title_jpg"); fireAuto = res("fire_auto_jpg");
     setSize(1100, 700); setResizable(false, false);
 
@@ -55,8 +56,8 @@ VonoxEditor::VonoxEditor(VonoxProcessor& p)
     const K ks[] = {
         { 80, 215, 29, params::lowMidCut, false, "dB", 1 }, { 211, 215, 29, params::presence, true, "dB", 1 },
         { 80, 360, 29, params::air, true, "dB", 1 },        { 211, 360, 29, params::warmth, false, "dB", 1 },
-        { 889, 215, 29, params::compress, false, "", 2 },   { 1020, 215, 29, params::deEssAmount, true, "", 2 },
-        { 889, 360, 29, params::satDrive, true, "dB", 1 },  { 1020, 360, 29, params::ceiling, false, "dB", 1 },
+        { 889, 215, 29, params::space, false, "", 2 },      { 1020, 215, 29, params::character, true, "", 2 },
+        { 889, 360, 29, params::width, true, "%", 0 },      { 1020, 360, 29, params::compress, false, "", 2 },
         { 746, 566, 26, params::mix, true, "%", 0 },        { 841, 566, 26, params::output, false, "dB", 1 },
     };
     for (const auto& k : ks) {
@@ -72,7 +73,10 @@ VonoxEditor::VonoxEditor(VonoxProcessor& p)
     }
     // The 72 % readout in the octagon is a second view of MIX: hide the duplicate knob drag area by using it as a zone below.
     auto place = [this](juce::Component& c, int x, int y, int w, int h) { c.setBounds(x - 4, y - 4, w + 8, h + 8); addAndMakeVisible(c); };
-    place(bypassBtn, 905, 512, 150, 34); place(aBtn, 905, 556, 70, 34); place(bBtn, 985, 556, 70, 34); place(levelBtn, 905, 600, 150, 34);
+    place(bypassBtn, 905, 512, 150, 34); place(aBtn, 905, 556, 70, 34); place(bBtn, 985, 556, 70, 34); place(levelBtn, 905, 600, 150, 34); place(advBtn, 487, 610, 126, 32);
+    adv = std::make_unique<AdvancedPanel>(proc, background); adv->setBounds(18, 118, 1064, 304); addAndMakeVisible(*adv); adv->setVisible(false);
+    advBtn.onClick = [this] { adv->setVisible(!adv->isVisible()); advBtn.setToggleState(adv->isVisible(), juce::dontSendNotification); advBtn.toFront(false); };
+    advBtn.setTooltip("Advanced: every module parameter (EQ, compressors, de-esser, saturation, reverb, delay, doubler, chorus)");
     autoBtn.setBounds(428, 428, 244, 74); addAndMakeVisible(autoBtn);
     autoBtn.onClick = [this] { proc.runAutoMix(); };
     bypassAtt = std::make_unique<juce::ButtonParameterAttachment>(*proc.apvts.getParameter(params::kBypassId), bypassBtn);
@@ -188,4 +192,62 @@ void VonoxEditor::paint(juce::Graphics& g) {
         }
     };
     drawMeter(44, 522, 346, 22, mIn); drawMeter(44, 574, 346, 22, mOut); drawMeter(44, 626, 346, 22, mGr);
+}
+
+// ---------------------------------------------------------------- ADVANCED panel
+void AdvancedPanel::Content::paint(juce::Graphics& g) {
+    for (auto& h : heads) {
+        g.setColour(juce::Colour(150, 70, 255)); g.setFont(juce::FontOptions(13.f, juce::Font::bold));
+        g.drawText(h.first, h.second, juce::Justification::centredLeft);
+        g.setColour(juce::Colour(150, 70, 255).withAlpha(0.5f)); g.drawHorizontalLine(h.second.getBottom() - 1, float(h.second.getX()), float(h.second.getRight()));
+    }
+}
+
+AdvancedPanel::AdvancedPanel(VonoxProcessor& p, const juce::Image& b) : proc(p), bg(b) {
+    using namespace params;
+    struct G { const char* title; std::vector<int> ids; const char* combo1; const char* combo2; };
+    const std::vector<G> groups = {
+        { "SUBTRACTIVE EQ + COMPRESSORS", { hpf, lowMidHz, boxCut, harshCut, harshHz, fetThresh, fetRatio, fetAttack, fetRelease, optoThresh, optoRatio, optoAttack, optoRelease, presenceHz }, nullptr, nullptr },
+        { "DE-ESSER, RESONANCE, SATURATION, OUTPUT", { deEssHz, deEssThresh, deEssAmount, resAmount, resThresh, satDrive, exciter, parComp, ceiling }, kSatModeId, nullptr },
+        { "REVERB", { rvAmount, rvDecay, rvPre, rvDamp, rvHp, rvLp, duck }, kRvModeId, nullptr },
+        { "DELAY, DOUBLER, CHORUS", { dlAmount, dlMs, dlFb, dlHp, dlLp, doubler, chorus }, kDlModeId, kDlDivId },
+    };
+    const int cellW = 100, cellH = 80, perRow = 10; int y = 4;
+    auto addCombo = [&](const char* id, int x, int yy) {
+        auto* par = dynamic_cast<juce::AudioParameterChoice*>(proc.apvts.getParameter(id)); if (!par) return;
+        auto c = std::make_unique<juce::ComboBox>(); c->addItemList(par->choices, 1); c->setBounds(x + 4, yy + 4, cellW * 2 - 12, 26);
+        c->setColour(juce::ComboBox::backgroundColourId, juce::Colour(14, 6, 24)); c->setColour(juce::ComboBox::outlineColourId, juce::Colour(150, 70, 255));
+        c->setColour(juce::ComboBox::textColourId, juce::Colours::white); c->setColour(juce::ComboBox::arrowColourId, juce::Colour(255, 205, 225));
+        cAtt.push_back(std::make_unique<juce::ComboBoxParameterAttachment>(*par, *c, nullptr));
+        content.addAndMakeVisible(*c); combos.push_back(std::move(c));
+        auto lab = par->getName(30); (void) lab;
+    };
+    for (auto& g : groups) {
+        content.heads.push_back({ g.title, { 0, y, 1040, 20 } }); y += 24;
+        int col = 0;
+        if (g.combo1) { addCombo(g.combo1, 0, y); col += 2; }
+        if (g.combo2) { addCombo(g.combo2, col * cellW, y); col += 2; }
+        for (int id : g.ids) {
+            if (col >= perRow) { col = 0; y += cellH; if (g.combo1 && col == 0) {} }
+            const auto& d = kFloats[id];
+            auto k = std::make_unique<MiniKnob>(d.name, d.unit, d.hi - d.lo > 100 ? 0 : (d.hi - d.lo > 10 ? 1 : 2), juce::Colour(255, 40, 60));
+            auto* par = proc.apvts.getParameter(d.id);
+            k->setNormalisableRange(juce::NormalisableRange<double>(d.lo, d.hi, 0.01, d.skew));
+            k->setDoubleClickReturnValue(true, d.def);
+            k->setBounds(col * cellW, y, cellW, cellH);
+            kAtt.push_back(std::make_unique<juce::SliderParameterAttachment>(*par, *k, nullptr));
+            content.addAndMakeVisible(*k); knobs.push_back(std::move(k)); ++col;
+        }
+        y += cellH + 10;
+    }
+    content.setSize(1040, y); vp.setViewedComponent(&content, false); vp.setScrollBarsShown(true, false); addAndMakeVisible(vp);
+    vp.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, juce::Colour(150, 70, 255));
+}
+
+void AdvancedPanel::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(8, 3, 14).withAlpha(0.97f)); g.fillRoundedRectangle(r, 8.f);
+    g.setColour(juce::Colour(150, 70, 255)); g.drawRoundedRectangle(r.reduced(1.f), 8.f, 2.f);
+    g.setColour(juce::Colour(255, 205, 225)); g.setFont(juce::FontOptions(15.f, juce::Font::bold));
+    g.drawText("ADVANCED  -  every module parameter (all automatable)", 18, 8, getWidth() - 36, 20, juce::Justification::centredLeft);
 }

@@ -30,12 +30,41 @@ struct MixSettings {
     double presenceDb = 0, presenceHz = 3500, airDb = 0, warmthDb = 0;
     // Saturation
     dsp::Saturator::Mode satMode = dsp::Saturator::Mode::Warm; double satDriveDb = 3;
+    // Parallel compression, harmonics, space and width
+    double parCompAmount = 0.0;                         // 0..1, heavy compressed copy blended in
+    double exciterAmount = 0.0;                         // 0..1, harmonic generation on the highs
+    int    reverbMode = 1;                              // 0 Room, 1 Plate, 2 Hall, 3 Chamber
+    double reverbAmount = 0.0, reverbDecay = 1.0, reverbPreMs = 20, reverbDamp = 0.5, reverbHp = 250, reverbLp = 8500;
+    int    delayMode = 0;                               // 0 Stereo (tempo sync), 1 Slapback, 2 Ping-pong
+    int    delayDiv = 2;                                // 0 1/16, 1 1/8T, 2 1/8, 3 1/8., 4 1/4, 5 1/4., 6 1/2, 7 free (delayMs)
+    double delayAmount = 0.0, delayMs = 250, delayFeedback = 0.3, delayHp = 300, delayLp = 5500;
+    double doublerAmount = 0.0, chorusAmount = 0.0;
+    double duck = 0.5;                                  // 0..1: how much reverb/delay duck under the dry vocal
+    double width = 1.0;                                 // 0..2
     // Output
     double ceilingDb = -1.0, outputTrimDb = 0;
 };
 
 // Base character per style: [presence, air, warmth, comp-depth 0..1, drive, deEss]
 struct StyleBase { double presence, air, warmth, compDepth, drive, deEss; dsp::Saturator::Mode sat; };
+
+// Space / colour character per style (all values are real DSP parameters)
+struct StyleFx {
+    double parComp, exciter; int rvMode; double rv, rvDecay, rvDamp; int dlMode, dlDiv; double dl, dlFb; double dbl, chorus, width;
+};
+inline StyleFx fxFor(Style s) {
+    switch (s) {
+    case Style::CleanStudio:   return { 0.10, 0.10, 1, 0.12, 0.8, 0.5, 0, 2, 0.00, 0.25, 0.00, 0.00, 1.00 };
+    case Style::ModernRap:     return { 0.25, 0.25, 1, 0.12, 0.8, 0.5, 1, 2, 0.12, 0.15, 0.08, 0.00, 1.00 };
+    case Style::MelodicRap:    return { 0.20, 0.25, 2, 0.24, 1.0, 0.5, 2, 5, 0.20, 0.35, 0.15, 0.08, 1.15 };
+    case Style::AggressiveRap: return { 0.40, 0.35, 0, 0.08, 0.7, 0.6, 1, 2, 0.12, 0.10, 0.06, 0.00, 1.00 };
+    case Style::Drill:         return { 0.35, 0.30, 0, 0.12, 0.8, 0.7, 0, 2, 0.08, 0.25, 0.06, 0.00, 1.00 };
+    case Style::Trap:          return { 0.30, 0.25, 2, 0.26, 1.2, 0.6, 2, 4, 0.22, 0.38, 0.20, 0.05, 1.15 };
+    case Style::RnB:           return { 0.15, 0.20, 1, 0.26, 1.2, 0.4, 0, 3, 0.14, 0.28, 0.12, 0.15, 1.20 };
+    case Style::Pop:           return { 0.25, 0.30, 1, 0.20, 1.0, 0.4, 0, 2, 0.12, 0.25, 0.12, 0.10, 1.20 };
+    default:                   return { 0.20, 0.20, 1, 0.15, 1.0, 0.5, 0, 2, 0.05, 0.25, 0.05, 0.00, 1.00 };
+    }
+}
 
 inline StyleBase baseFor(Style s) {
     using M = dsp::Saturator::Mode;
@@ -62,6 +91,7 @@ public:
         if (!p.valid) { // conservative defaults when analysis is unreliable
             m.hpfHz = 80; m.presenceDb = b.presence * 0.5; m.airDb = b.air * 0.3;
             m.fetThreshDb = -18; m.optoThreshDb = -22; m.deEssAmount = 0.3; m.satDriveDb = 1.0;
+            applyFx(m, p, style);
             return m;
         }
         // --- Subtractive EQ: only cut what was actually measured ---
@@ -102,7 +132,26 @@ public:
         // --- Saturation: less on already dense/clipped material ---
         m.satDriveDb = b.drive * (p.clipped ? 0.2 : 1.0) * (p.crestDb < 10.0 ? 0.6 : 1.0);
         m.ceilingDb = -1.0;
+        applyFx(m, p, style);
         return m;
+    }
+
+    // Space and colour follow the style AND the measured recording (a noisy or already bright take gets
+    // less reverb / exciter; a very dynamic take gets more parallel compression).
+    static void applyFx(MixSettings& m, const VocalProfile& p, Style style) {
+        const StyleFx f = fxFor(style);
+        const bool v = p.valid;
+        const double noise = (v && p.noisy) ? 0.5 : 1.0;
+        const double bright = v ? p.brightness : 0.5, dyn = v ? std::clamp((p.dynamicRangeDb - 4.0) / 12.0, 0.0, 1.0) : 0.5;
+        m.parCompAmount = std::clamp(f.parComp * (0.6 + 0.8 * dyn), 0.0, 1.0);
+        m.exciterAmount = std::clamp(f.exciter * (1.3 - 1.0 * bright) * noise, 0.0, 1.0);
+        m.reverbMode = f.rvMode; m.reverbAmount = f.rv * noise; m.reverbDecay = f.rvDecay;
+        m.reverbDamp = std::clamp(f.rvDamp + 0.3 * bright, 0.0, 0.95);
+        m.reverbPreMs = 15 + 25 * (f.rvMode >= 2 ? 1 : 0); m.reverbHp = 250; m.reverbLp = 9500 - 3000 * bright;
+        m.delayMode = f.dlMode; m.delayDiv = f.dlDiv; m.delayAmount = f.dl * noise; m.delayFeedback = f.dlFb;
+        m.delayMs = (f.dlMode == 1) ? 95 : 250; m.delayHp = 300; m.delayLp = 6500 - 2500 * bright;
+        m.doublerAmount = f.dbl * noise; m.chorusAmount = f.chorus; m.width = f.width;
+        m.duck = 0.55;
     }
 
     // MIX AMOUNT (0..1): scales each stage in its own way instead of dry/wet crossfading
@@ -122,6 +171,8 @@ public:
         r.optoThreshDb = peakDb + (s.optoThreshDb - peakDb) * a;
         r.deEssAmount *= a; r.resAmount *= a;
         r.satDriveDb *= a;
+        r.parCompAmount *= a; r.exciterAmount *= a; r.reverbAmount *= a; r.delayAmount *= a;
+        r.doublerAmount *= a; r.chorusAmount *= a; r.width = 1.0 + (s.width - 1.0) * a;
         return r;
     }
 };

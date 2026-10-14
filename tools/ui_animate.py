@@ -325,9 +325,9 @@ for px, py in [(262, 24), (838, 24), (262, 92), (838, 92)]: screw(px, py, 4.5)
 panel(18, 118, 255, 330, title="TONE")
 knob(80, 215, "LOW-MID", 0.35); knob(211, 215, "PRESENCE", 0.62, accent=VIOLET)
 knob(80, 360, "AIR", 0.55, accent=VIOLET); knob(211, 360, "WARMTH", 0.4)
-panel(827, 118, 255, 330, title="DYNAMICS")
-knob(889, 215, "COMPRESS", 0.6); knob(1020, 215, "DE-ESS", 0.45, accent=VIOLET)
-knob(889, 360, "SATURATE", 0.38, accent=VIOLET); knob(1020, 360, "CEILING", 0.8)
+panel(827, 118, 255, 330, title="SPACE")
+knob(889, 215, "SPACE", 0.5); knob(1020, 215, "CHARACTER", 0.5, accent=VIOLET)
+knob(889, 360, "WIDTH", 0.5, accent=VIOLET); knob(1020, 360, "COMPRESS", 0.5)
 
 # CENTER: octagon frame + red glass (animated contents added per frame)
 cx, cy = 550, 262
@@ -383,9 +383,10 @@ D().line([(px * S, py * S) for px, py in hexp + [hexp[0]]], fill=(3, 3, 6, 255),
 hi = [(550 + 90 * math.cos(math.radians(60 * i)), 598 + 60 * math.sin(math.radians(60 * i))) for i in range(6)]
 lit(poly_mask(hi), base=24, bevel=6, k=2.2, invert=True, mul=0.7)
 D().line([(px * S, py * S) for px, py in hi + [hi[0]]], fill=(0, 0, 0, 255), width=2 * S)
-V = [(512, 572), (537, 572), (550, 604), (563, 572), (588, 572), (558, 630), (542, 630)]
+V = [(550 + (x - 550) * 0.58, 570 + (y - 601) * 0.58) for x, y in [(512, 572), (537, 572), (550, 604), (563, 572), (588, 572), (558, 630), (542, 630)]]
 glow(lambda g, c: g.polygon([(x * S, y * S) for x, y in V], outline=c + (255,), width=3 * S), RED, 6, 1.4)
 dropshadow(V, 3, 3, 220); lit(poly_mask(V), base=190, bevel=2.2, k=2.6)
+button(487, 610, 126, 32, "ADVANCED", False, VIOLET, 12, name="adv")
 
 # MILITARY CHAINS: three per side from each side panel to the red display, plus two to AUTO MIX
 for py_panel, py_oct in ((190, 222), (262, 262), (334, 302)):

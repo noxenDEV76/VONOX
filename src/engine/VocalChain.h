@@ -8,6 +8,7 @@
 // Bypass is a 10 ms crossfade to the untouched input. LEVEL MATCH gain-matches the
 // processed path to the dry path (slow RMS) so loudness does not bias A/B listening.
 #include "VocalMixEngine.h"
+#include "../dsp/Effects.h"
 #include <atomic>
 #include <vector>
 #include <array>
@@ -24,6 +25,9 @@ struct ChainTarget {
     double mix = 1.0;          // 0..1 MIX AMOUNT (see VocalMixEngine::scale)
     double compress = 0.5;     // 0..1 compression macro: 0.5 = as set, 0 = off, 1 = double (ratio-1)
     double outputDb = 0.0;     // -12..+12
+    double space = 0.5;        // 0..1 macro on reverb + delay amounts: 0.5 = as set, 0 = dry, 1 = double
+    double character = 0.5;    // 0..1 macro on exciter + saturation drive + parallel compression (same law)
+    double bpm = 120.0;        // host tempo for the synchronised delay
     bool bypass = false;
     bool levelMatch = false;
 };
@@ -41,7 +45,11 @@ public:
         rampStep = 1.0 / (sr * 0.010);
         rmsAlpha = 1.0 - std::exp(-1.0 / (sr * 1.5));
         for (auto& c : ch) { c.res.prepare(sr); c.ess.prepare(sr); c.sat.prepare(sr); }
-        fet.prepare(sr); opto.prepare(sr); limiter.prepare(sr);
+        fet.prepare(sr); opto.prepare(sr); limiter.prepare(sr); parComp.prepare(sr);
+        parComp.set(-32.0, 8.0, 3.0, 90.0, 3.0, 0.0);
+        for (auto& e : exc) e.prepare(sr);
+        rev.prepare(sr); dly.prepare(sr); chor.prepare(sr); dbl.prepare(sr); wid.prepare(sr);
+        duckAtk = 1.0 - std::exp(-1.0 / (sr * 0.005)); duckRel = 1.0 - std::exp(-1.0 / (sr * 0.150));
         reset();
         snapToTarget = true;
     }
@@ -51,13 +59,20 @@ public:
             c.hpf.reset(); c.lowMid.reset(); c.box.reset(); c.harsh.reset(); c.warm.reset(); c.pres.reset(); c.air.reset();
             c.res.reset(); c.ess.reset(); c.sat.reset();
         }
-        fet.reset(); opto.reset(); limiter.reset();
+        fet.reset(); opto.reset(); limiter.reset(); parComp.reset();
+        for (auto& e : exc) e.reset();
+        rev.reset(); dly.reset(); chor.reset(); dbl.reset(); wid.reset(); duckEnv = 0.0;
         bypassRamp = tgtBypass ? 1.0 : 0.0; lmGain = 1.0; eDry = eWet = 1e-6; ctlCounter = kControlBlock;
     }
 
     // Called once per block from the audio thread (plain values, no allocation).
     void setTarget(const ChainTarget& t) {
         MixSettings s = VocalMixEngine::scale(t.base, t.mix, -3.0);
+        const double ks = std::clamp(t.space, 0.0, 1.0) * 2.0, kc = std::clamp(t.character, 0.0, 1.0) * 2.0;
+        s.reverbAmount = std::clamp(s.reverbAmount * ks, 0.0, 1.0); s.delayAmount = std::clamp(s.delayAmount * ks, 0.0, 1.0);
+        s.exciterAmount = std::clamp(s.exciterAmount * kc, 0.0, 1.0); s.parCompAmount = std::clamp(s.parCompAmount * kc, 0.0, 1.0);
+        s.satDriveDb = std::clamp(s.satDriveDb * kc, 0.0, 18.0);
+        bpm = std::clamp(t.bpm, 30.0, 300.0);
         const double k = std::clamp(t.compress, 0.0, 1.0) * 2.0;
         s.fetRatio = std::clamp(1.0 + (s.fetRatio - 1.0) * k, 1.0, 20.0);
         s.optoRatio = std::clamp(1.0 + (s.optoRatio - 1.0) * k, 1.0, 20.0);
@@ -98,6 +113,27 @@ public:
                 x[c] = s.air.process(s.pres.process(s.warm.process(x[c])));
                 if (cur.satDriveDb > 0.05) x[c] = s.sat.process(x[c]);
             }
+            // parallel compression (heavy compressed copy, linked detector) + harmonic exciter
+            if (cur.parCompAmount > 0.005) {
+                double dp = std::abs(x[0]); if (nc > 1) dp = std::max(dp, std::abs(x[1]));
+                const double gp = parComp.gainFor(dp);
+                for (int c = 0; c < nc; ++c) x[c] += cur.parCompAmount * 1.5 * x[c] * gp;
+            }
+            if (cur.exciterAmount > 0.005) for (int c = 0; c < nc; ++c) x[c] = exc[c].process(x[c]);
+
+            // dedicated wet paths: reverb / delay (ducked under the vocal), doubler / chorus (body of the vocal)
+            {
+                const double mono = (nc > 1) ? 0.5 * (x[0] + x[1]) : x[0];
+                duckEnv += ((std::abs(mono) > duckEnv) ? duckAtk : duckRel) * (std::abs(mono) - duckEnv);
+                const double duckGain = 1.0 - cur.duck * std::min(1.0, duckEnv / 0.12) * 0.75;
+                double wl = 0, wr = 0, a, b;
+                if (cur.reverbAmount > 0.003) { rev.process(mono, mono, a, b); wl += a * cur.reverbAmount * 5.0 * duckGain; wr += b * cur.reverbAmount * 5.0 * duckGain; }
+                if (cur.delayAmount > 0.003) { dly.process(mono, mono, a, b); wl += a * cur.delayAmount * duckGain; wr += b * cur.delayAmount * duckGain; }
+                if (cur.doublerAmount > 0.003) { dbl.process(mono, a, b); wl += a * cur.doublerAmount * 0.6; wr += b * cur.doublerAmount * 0.6; }
+                if (cur.chorusAmount > 0.003) { chor.process(x[0], nc > 1 ? x[1] : x[0], a, b); wl += a * cur.chorusAmount * 0.6; wr += b * cur.chorusAmount * 0.6; }
+                if (nc > 1) { x[0] += wl; x[1] += wr; } else x[0] += 0.5 * (wl + wr);
+            }
+
             // loudness match (processed -> dry), slow RMS so it never pumps
             double ew = 0, ed = 0;
             for (int c = 0; c < nc; ++c) { ew += x[c] * x[c]; ed += d[c] * d[c]; }
@@ -107,6 +143,7 @@ public:
             const double outLin = dbToLin(curOutDb) * lmGain;
             for (int c = 0; c < nc; ++c) x[c] *= outLin;
 
+            if (nc > 1 && std::abs(cur.width - 1.0) > 0.005) wid.process(x[0], x[1]);
             // 8. peak limiter (linked)
             if (nc > 1) limiter.processLinked(x[0], x[1]); else x[0] = limiter.process(x[0]);
 
@@ -146,7 +183,12 @@ private:
         l(a.resAmount, b.resAmount); l(a.resThreshDb, b.resThreshDb);
         l(a.presenceDb, b.presenceDb); l(a.presenceHz, b.presenceHz); l(a.airDb, b.airDb); l(a.warmthDb, b.warmthDb);
         l(a.satDriveDb, b.satDriveDb); l(a.ceilingDb, b.ceilingDb); l(a.outputTrimDb, b.outputTrimDb);
-        a.satMode = b.satMode;
+        l(a.parCompAmount, b.parCompAmount); l(a.exciterAmount, b.exciterAmount);
+        l(a.reverbAmount, b.reverbAmount); l(a.reverbDecay, b.reverbDecay); l(a.reverbPreMs, b.reverbPreMs); l(a.reverbDamp, b.reverbDamp);
+        l(a.reverbHp, b.reverbHp); l(a.reverbLp, b.reverbLp);
+        l(a.delayAmount, b.delayAmount); l(a.delayMs, b.delayMs); l(a.delayFeedback, b.delayFeedback); l(a.delayHp, b.delayHp); l(a.delayLp, b.delayLp);
+        l(a.doublerAmount, b.doublerAmount); l(a.chorusAmount, b.chorusAmount); l(a.duck, b.duck); l(a.width, b.width);
+        a.satMode = b.satMode; a.reverbMode = b.reverbMode; a.delayMode = b.delayMode; a.delayDiv = b.delayDiv;
     }
 
     void smoothControl() {
@@ -171,12 +213,28 @@ private:
         fet.set(cur.fetThreshDb, cur.fetRatio, cur.fetAttackMs, cur.fetReleaseMs, 6.0, 0.0);
         opto.set(cur.optoThreshDb, cur.optoRatio, cur.optoAttackMs, cur.optoReleaseMs, 10.0, 0.0);
         limiter.set(cur.ceilingDb, 80.0);
+        for (auto& e : exc) e.set(cur.exciterAmount, 2800.0);
+        {
+            dsp::Reverb::Params rp; rp.mode = static_cast<dsp::Reverb::Mode>(std::clamp(cur.reverbMode, 0, 3));
+            rp.decay = cur.reverbDecay; rp.preDelayMs = cur.reverbPreMs; rp.damping = cur.reverbDamp; rp.hpHz = cur.reverbHp; rp.lpHz = cur.reverbLp; rp.width = 1.0;
+            rev.set(rp);
+            static const double beats[7] = { 0.25, 1.0 / 3.0, 0.5, 0.75, 1.0, 1.5, 2.0 };
+            dsp::StereoDelay::Params dp; dp.mode = static_cast<dsp::StereoDelay::Mode>(std::clamp(cur.delayMode, 0, 2));
+            dp.timeMs = (cur.delayDiv >= 0 && cur.delayDiv < 7) ? 60000.0 / bpm * beats[cur.delayDiv] : cur.delayMs;
+            if (dp.mode == dsp::StereoDelay::Mode::Slapback && cur.delayDiv == 7) dp.timeMs = cur.delayMs;
+            dp.feedback = cur.delayFeedback; dp.hpHz = cur.delayHp; dp.lpHz = cur.delayLp; dp.width = 1.0;
+            dly.set(dp);
+            wid.set(cur.width);
+        }
     }
 
     double sampleRate = 44100.0, ctlAlpha = 0.01, rampAlpha = 0.01, rampStep = 0.002, rmsAlpha = 1e-5;
     int ctlCounter = kControlBlock;
     std::array<Channel, kMaxChannels> ch;
-    dsp::Compressor fet, opto;
+    dsp::Compressor fet, opto, parComp;
+    std::array<dsp::Exciter, kMaxChannels> exc;
+    dsp::Reverb rev; dsp::StereoDelay dly; dsp::Chorus chor; dsp::Doubler dbl; dsp::Width wid;
+    double bpm = 120.0, duckEnv = 0.0, duckAtk = 0.01, duckRel = 0.0005;
     dsp::Limiter limiter;
     MixSettings cur, tgt;
     double curOutDb = 0, tgtOutDb = 0, bypassRamp = 0, lmGain = 1.0, eDry = 1e-6, eWet = 1e-6;

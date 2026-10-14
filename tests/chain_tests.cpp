@@ -68,13 +68,14 @@ int main() {
     }
     { // 5. Stereo: identical channels in -> identical channels out (no widening / drift)
         VocalChain c; c.prepare(sr, 512); auto t = settingsFor(Style::MelodicRap, in, sr);
+        t.base.reverbAmount = t.base.delayAmount = t.base.doublerAmount = t.base.chorusAmount = 0; t.base.width = 1.0;   // stereo effects off
         std::vector<float> L = in, R = in; double d = 0;
         for (size_t i = 0; i < L.size(); i += 256) {
             const int n = int(std::min<size_t>(256, L.size() - i)); float* p[2] = { L.data() + i, R.data() + i };
             c.setTarget(t); c.process(p, 2, n);
         }
         for (size_t i = 0; i < L.size(); ++i) d = std::max(d, double(std::abs(L[i] - R[i])));
-        CHECK(d < 1e-6, "Dual-mono stereo input stays perfectly centred");
+        CHECK(d < 1e-6, "Dual-mono stereo input stays perfectly centred (stereo effects off)");
     }
     { // 6. Neutral settings (MIX 0 %, no trim) leave a 1 kHz tone essentially untouched
         VocalChain c; c.prepare(sr, 512); auto t = settingsFor(Style::ModernRap, in, sr); t.mix = 0.0;
@@ -116,6 +117,30 @@ int main() {
         CHECK(c.meters.inPeakDb.load() > -30.f && c.meters.inPeakDb.load() < 0.f && c.meters.outRmsDb.load() > -60.f, "Meters hold plausible measured values");
     }
 
+    { // 11. Effects are audible and stable: reverb/delay tails continue after the input stops, and the dry centre is kept
+        VocalChain c; c.prepare(sr, 512); auto t = settingsFor(Style::MelodicRap, in, sr);
+        t.base.reverbAmount = 0.5; t.base.delayAmount = 0.4; t.space = 0.5;
+        std::vector<float> L = in, R = in; L.resize(L.size() + size_t(sr * 2), 0.f); R = L;
+        for (size_t i = 0; i < L.size(); i += 256) { const int n = int(std::min<size_t>(256, L.size() - i)); float* p[2] = { L.data() + i, R.data() + i }; c.setTarget(t); c.process(p, 2, n); }
+        double tailE = 0, diff = 0, mid = 0; bool fin = true; const size_t t0 = in.size() + size_t(sr * 0.2);
+        for (size_t i = t0; i < t0 + size_t(sr * 1.0); ++i) { tailE += double(L[i]) * L[i]; fin &= std::isfinite(L[i]); }
+        for (size_t i = 0; i < in.size(); ++i) { diff += std::abs(double(L[i]) - R[i]); mid += std::abs(0.5 * (double(L[i]) + R[i])); }
+        CHECK(fin && tailE > 1e-6, "Reverb + delay leave an audible tail after the input stops");
+        CHECK(diff > 0.01 * mid, "Stereo effects create real stereo width (L != R)");
+    }
+    { // 12. Presets/styles differ measurably in the effects configuration
+        auto prof = VocalAnalyzer::analyze(in, sr);
+        auto a = VocalMixEngine::compute(prof, Style::CleanStudio), b = VocalMixEngine::compute(prof, Style::Trap);
+        CHECK(b.reverbAmount > a.reverbAmount + 0.05 && b.delayAmount > a.delayAmount + 0.05 && b.width > a.width, "Trap has clearly more space than Clean Studio");
+    }
+    { // 13. SPACE = 0 and MIX = 0 give back the dry vocal (no tails)
+        VocalChain c; c.prepare(sr, 512); auto t = settingsFor(Style::Trap, in, sr); t.space = 0.0; t.character = 0.5;
+        t.base.doublerAmount = 0; t.base.chorusAmount = 0; t.base.width = 1.0;
+        std::vector<float> L = in; L.resize(L.size() + size_t(sr), 0.f); std::vector<float> R = L;
+        for (size_t i = 0; i < L.size(); i += 256) { const int n = int(std::min<size_t>(256, L.size() - i)); float* p[2] = { L.data() + i, R.data() + i }; c.setTarget(t); c.process(p, 2, n); }
+        double tail = 0; for (size_t i = in.size() + size_t(sr * 0.3); i < L.size(); ++i) tail += double(L[i]) * L[i];
+        CHECK(tail < 1e-8, "SPACE = 0 removes reverb and delay completely");
+    }
     std::printf("\n%s (%d failure%s)\n", failures ? "TESTS FAILED" : "ALL TESTS PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

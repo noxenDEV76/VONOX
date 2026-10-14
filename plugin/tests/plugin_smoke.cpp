@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 20; ++i) { voice(buf, sr, t); juce::AudioBuffer<float> ref(buf); p.processBlock(buf, midi); if (i == 19) { bool same = true; for (int j = 0; j < blk; ++j) same &= buf.getSample(0, j) == ref.getSample(0, j); CHECK(same); } }
     p.setParam("bypass", 0.f);
 
-    CHECK(p.getNumPrograms() >= 30);
+    CHECK(p.getNumPrograms() >= 60);
     CHECK(p.getLatencySamples() == 0);
 
     {
@@ -61,6 +61,15 @@ int main(int argc, char** argv) {
             juce::File f = juce::File(argv[1]).getChildFile("editor_snapshot.png"); f.deleteFile();
             juce::FileOutputStream fo(f); juce::PNGImageFormat().writeImageToStream(img, fo);
             std::printf("snapshot %s\n", f.getFullPathName().toRawUTF8());
+            p.applyPreset(6);
+            if (auto* ve = dynamic_cast<VonoxEditor*>(ed.get())) {
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
+                auto i1 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
+                juce::File f1 = juce::File(argv[1]).getChildFile("editor_main.png"); f1.deleteFile(); { juce::FileOutputStream o1(f1); juce::PNGImageFormat().writeImageToStream(i1, o1); }
+                ve->showAdvanced(true); juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
+                auto i2 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
+                juce::File f2 = juce::File(argv[1]).getChildFile("editor_adv.png"); f2.deleteFile(); { juce::FileOutputStream o2(f2); juce::PNGImageFormat().writeImageToStream(i2, o2); }
+            }
         }
     }
     // optional: frame dump for the README animation (arg 2 = number of presets to cycle)
