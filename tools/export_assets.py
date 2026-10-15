@@ -1,7 +1,7 @@
 """Exports the VONOX UI art as plugin assets (plugin/assets).
 
 Runs the same renderer as the preview in asset-export mode:
-  background.png       full 1100x700 artwork without knob bodies / arcs / meter segments / dynamic text
+  background.png       full 1100x700 artwork on a TRANSPARENT background (panels, chains, plates) without knob bodies / arcs / meter segments / dynamic text
   knob_body_29/26.png  white knob bodies (RGBA, rotated live by the plugin)
   btn_*_on/off.png     button sprites (both states)
   fire_title.jpg       72-frame vertical strip of the animated title fire (630x88 per frame)
@@ -24,17 +24,39 @@ def vignetted(img_s_res, rect=None):
     vig = U.VIG if rect is None else U.VIG[rect[1]:rect[3], rect[0]:rect[2]]
     return Image.fromarray(np.clip(arr * vig[..., None], 0, 255).astype(np.uint8))
 
-# background (static artwork: BASE already contains frames/plates/letters/glass gradient)
-bg = vignetted(U.BASE).resize((W, H), Image.LANCZOS)
-bg.save(os.path.join(out, "background.png"), optimize=True)
+# ---- transparent panel layer: the scene is rendered on a black and on a white backdrop; difference matting gives alpha
+if os.environ.get("VONOX_BG") == "white":
+    import pickle
+    np.save(os.path.join(out, "_white_base.npy"), np.asarray(U.BASE, np.uint8))
+    pickle.dump({k: (np.asarray(v[0], np.uint8), v[1]) for k, v in U.SPRITES.items()}, open(os.path.join(out, "_white_sprites.pkl"), "wb"))
+    sys.exit(0)
+import subprocess, pickle
+subprocess.run([sys.executable, os.path.abspath(__file__), out], env=dict(os.environ, VONOX_BG="white"), check=True)
+WB = np.load(os.path.join(out, "_white_base.npy")).astype(np.float32); WS = pickle.load(open(os.path.join(out, "_white_sprites.pkl"), "rb"))
+
+def matte(black_img, white_arr, rect=None, vig=True):
+    """black/white renders of the same layer -> straight-alpha RGBA PIL image at final size."""
+    Bk = np.asarray(black_img, np.float32); Wt = white_arr.astype(np.float32)
+    alpha = np.clip(1.0 - (Wt - Bk).mean(axis=2) / 255.0, 0, 1)
+    v = np.ones(Bk.shape[:2], np.float32)
+    if vig: v = U.VIG if rect is None else U.VIG[rect[1]:rect[3], rect[0]:rect[2]]
+    pre = np.dstack([Bk * v[..., None], alpha * 255.0])              # premultiplied colour (with vignette) + alpha
+    h, w = pre.shape[:2]
+    chans = [Image.fromarray(np.clip(pre[..., i], 0, 255).astype(np.uint8)).resize((w // S, h // S), Image.LANCZOS) for i in range(4)]
+    rgba = np.dstack([np.asarray(c, np.float32) for c in chans])
+    a = rgba[..., 3:4] / 255.0
+    rgb = np.where(a > 0.004, rgba[..., :3] / np.maximum(a, 0.004), 0.0)
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), rgba[..., 3:4]]).astype(np.uint8), "RGBA")
+
+matte(U.BASE, WB).save(os.path.join(out, "background.png"), optimize=True)
 
 # knob bodies
 for r in (29, 26):
     U.knob_body(r).save(os.path.join(out, f"knob_body_{r}.png"), optimize=True)
 
-# button sprites (apply the same vignette so they blend into the background)
+# button sprites: RGBA (transparent around the button so the star field shows through)
 for name, (img, rect) in U.SPRITES.items():
-    vignetted(img, rect).resize(((rect[2] - rect[0]) // S, (rect[3] - rect[1]) // S), Image.LANCZOS).save(os.path.join(out, name + ".png"), optimize=True)
+    matte(img, WS[name][0].astype(np.float32), rect).save(os.path.join(out, name + ".png"), optimize=True)
 
 # animated fire strips (72 frames, 24 fps loop = 3 s), opaque JPEG crops of the finished frames
 N = 72
@@ -47,4 +69,5 @@ for i in range(N):
     as_.paste(f.crop(auto_rect), (0, i * (auto_rect[3] - auto_rect[1])))
 ts.save(os.path.join(out, "fire_title.jpg"), quality=88)
 as_.save(os.path.join(out, "fire_auto.jpg"), quality=90)
+for tmp in ("_white_base.npy", "_white_sprites.pkl"): os.remove(os.path.join(out, tmp))
 for fn in sorted(os.listdir(out)): print(fn, os.path.getsize(os.path.join(out, fn)) // 1024, "KB")

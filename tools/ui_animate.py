@@ -15,7 +15,9 @@ EXPORT = bool(os.environ.get("VONOX_EXPORT"))   # asset-export mode: no value ar
 S = 2
 W, H = 1100, 700
 CW, CH = W * S, H * S
-RED, VIOLET, WHITE = (255, 40, 60), (150, 70, 255), (240, 240, 245)
+RED, VIOLET, WHITE = (70, 150, 255), (170, 85, 255), (240, 240, 250)      # RED = electric blue accent (name kept), VIOLET = galaxy violet
+MAGENTA, CYAN = (255, 70, 190), (90, 225, 255)
+BG_VAL = 255 if os.environ.get("VONOX_BG") == "white" else 0   # export runs twice (black / white backdrop) to recover a transparent panel layer
 FB = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
 FH = "/usr/share/fonts/opentype/inter/Inter-Black.otf"
 if not os.path.exists(FH): FH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -62,7 +64,7 @@ def make_master():
     return np.clip(base, 5, 255)
 
 MASTER = make_master()
-canvas = Image.fromarray(np.clip(np.stack([MASTER * 0.32, MASTER * 0.32, MASTER * 0.353], -1), 0, 255).astype(np.uint8))
+canvas = Image.new("RGB", (CW, CH), (BG_VAL, BG_VAL, BG_VAL))             # plain backdrop: the plugin draws the animated star field itself
 SHINE = Image.new("L", (CW, CH), 0)           # accumulated mask of all metal lettering
 
 # ---------------------------------------------------------------- drawing helpers
@@ -216,7 +218,6 @@ def knob(cx, cy, label, value, r=29, accent=RED):
     for i in range(48):
         a = i * 7.5 * math.pi / 180
         kd.line([R + math.cos(a) * (R - 7 * S), R + math.sin(a) * (R - 7 * S), R + math.cos(a) * (R - 2), R + math.sin(a) * (R - 2)], fill=(105, 105, 118, 255), width=S)
-    kd.ellipse([R * .42, R * .3, R * 1.1, R * .78], outline=(255, 255, 255, 90), width=S)
     ang = math.radians(135 + 270 * value)
     kd.line([R + math.cos(ang) * R * .22, R + math.sin(ang) * R * .22, R + math.cos(ang) * R * .84, R + math.sin(ang) * R * .84], fill=accent + (255,), width=3 * S)
     canvas.paste(k, (int(cx - R), int(cy - R)), k)
@@ -234,7 +235,6 @@ def knob_body(r):
     for i in range(48):
         a = i * 7.5 * math.pi / 180
         kd.line([R + math.cos(a) * (R - 7 * S), R + math.sin(a) * (R - 7 * S), R + math.cos(a) * (R - 2), R + math.sin(a) * (R - 2)], fill=(105, 105, 118, 255), width=S)
-    kd.ellipse([R * .42, R * .3, R * 1.1, R * .78], outline=(255, 255, 255, 90), width=S)
     return k.resize((k.width // S, k.height // S), Image.LANCZOS)
 
 SPRITES = {}
@@ -252,7 +252,7 @@ def _button(x, y, w, h, text, active=False, color=RED, fs=14):
     shape = Image.new("L", canvas.size, 0)
     ImageDraw.Draw(shape).rounded_rectangle([x * S, y * S, (x + w) * S, (y + h) * S], 9 * S, fill=255)
     if active: glow(lambda g, c: g.rounded_rectangle([x * S, y * S, (x + w) * S, (y + h) * S], 9 * S, fill=c + (210,)), color, 8, 1.1)
-    lit(shape, base=38 if not active else 44, bevel=4, k=2.6, tint=(1, .8, .85) if active and color == RED else (1, 1, 1.1), mul=1.0 if not active else 1.4)
+    lit(shape, base=38 if not active else 44, bevel=4, k=2.6, tint=(0.85, 0.9, 1.3) if active else (1, 1, 1.1), mul=1.0 if not active else 1.4)
     D().rounded_rectangle([x * S, y * S, (x + w) * S, (y + h) * S], 9 * S, outline=(color + (255,)) if active else (3, 3, 6, 255), width=int(2 * S))
     metal_label((x + w / 2, y + h / 2), text, fs, active=active, glow_col=color if active else None, glow_str=0.9)
 
@@ -295,7 +295,6 @@ def pipe(p0, p1, p2, p3, w=12, glow_col=None):
 
 # ======================= STATIC SCENE =======================
 yy, xx = np.mgrid[0:CH, 0:CW]
-lit(poly_mask(oct_pts(150, 105, 800, 420, 90)), base=40, bevel=18, k=1.6, invert=True, mul=0.7)
 
 pipe((550, 95), (550, 110), (550, 125), (550, 150), 16)
 pipe((500, 395), (480, 420), (500, 440), (505, 452), 12, glow_col=RED)
@@ -339,14 +338,25 @@ D().line([(px * S, py * S) for px, py in frame + [frame[0]]], fill=(3, 3, 6, 255
 lit(poly_mask(mid), base=34, bevel=7, k=2.4, invert=True, mul=0.8)
 D().line([(px * S, py * S) for px, py in mid + [mid[0]]], fill=(0, 0, 0, 255), width=3 * S)
 rr = np.hypot(xx - cx * S, yy - (cy - 8) * S) / (118 * S)
-disp = np.zeros((CH, CW, 3), np.float32)
-disp[..., 0] = np.clip(235 - 175 * rr, 40, 240); disp[..., 1] = np.clip(14 - 10 * rr, 2, 14); disp[..., 2] = np.clip(18 + 70 * rr ** 2, 14, 100)
+t_ = np.clip(rr, 0, 1)
+C0, C1, C2 = np.array([82, 44, 200], np.float32), np.array([30, 18, 108], np.float32), np.array([5, 4, 28], np.float32)
+k1 = np.clip(t_ / 0.55, 0, 1)[..., None]; k2 = np.clip((t_ - 0.55) / 0.45, 0, 1)[..., None]
+disp = np.where(t_[..., None] < 0.55, C0 + (C1 - C0) * k1, C1 + (C2 - C1) * k2)
+neb = noise_layer(CW, CH, 70 * S, 70 * S, 17) * 0.65 + noise_layer(CW, CH, 26 * S, 26 * S, 18) * 0.35
+disp += (np.clip(neb - 0.35, 0, 1) * (1 - t_) * 1.4)[..., None] * np.array([120, 30, 150], np.float32)
+disp += (np.clip(noise_layer(CW, CH, 50 * S, 50 * S, 23) - 0.5, 0, 1) * (1 - 0.6 * t_) * 1.6)[..., None] * np.array([20, 60, 150], np.float32)
+disp = np.clip(disp, 0, 255)
 glass_mask = poly_mask(glass); canvas.paste(Image.fromarray(disp.astype(np.uint8)), (0, 0), glass_mask)
+_r = random.Random(77)
+for _ in range(46):
+    _a, _d = _r.uniform(0, 6.283), 108 * math.sqrt(_r.random())
+    _x, _y = (cx + _d * math.cos(_a)) * S, (cy + _d * math.sin(_a)) * S; _v = _r.randint(70, 170); _rad = _r.choice([0.7, 0.9, 1.2]) * S
+    ImageDraw.Draw(canvas).ellipse([_x - _rad, _y - _rad, _x + _rad, _y + _rad], fill=(_v, _v, min(255, _v + 40)))
 dd = D()
 for a in range(0, 360, 30):
     x0 = cx + 40 * math.cos(math.radians(a)); y0 = cy + 40 * math.sin(math.radians(a))
     x1 = cx + 112 * math.cos(math.radians(a + 8)); y1 = cy + 112 * math.sin(math.radians(a + 8))
-    dd.line([(x0 * S, y0 * S), (x1 * S, y1 * S)], fill=(255, 90, 120, 50), width=S)
+    dd.line([(x0 * S, y0 * S), (x1 * S, y1 * S)], fill=(150, 160, 255, 40), width=S)
 refl = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
 ImageDraw.Draw(refl).pieslice([(cx - 105) * S, (cy - 125) * S, (cx + 105) * S, (cy + 40) * S], 200, 340, fill=(255, 255, 255, 34))
 canvas.paste(refl, (0, 0), Image.composite(refl.getchannel("A"), Image.new("L", canvas.size, 0), glass_mask))
@@ -359,22 +369,28 @@ dropshadow(btn, 8, 10, 230); lit(poly_mask(btn), base=118, bevel=12, k=2.8)
 D().line([(px * S, py * S) for px, py in btn + [btn[0]]], fill=(3, 3, 6, 255), width=int(3.5 * S))
 bi = [(bx + 44, by + 11), (bx + bw - 44, by + 11), (bx + bw - 22, by + 24), (bx + bw - 30, by + bh - 11), (bx + 30, by + bh - 11), (bx + 22, by + 24)]
 auto_window = poly_mask(bi)
-glow(lambda g, c: g.polygon([(px * S, py * S) for px, py in bi], fill=c + (230,)), RED, 14, 1.2)
-lit(auto_window, base=60, bevel=6, k=2.4, invert=True, tint=(1.5, 0.55, 0.65), mul=1.2)
-D().line([(px * S, py * S) for px, py in bi + [bi[0]]], fill=(255, 60, 80, 255), width=int(2.5 * S))
-auto_mask = metal_label((bx + bw / 2, by + bh / 2 + 3), "AUTO MIX", 27, glow_col=RED, glow_str=1.3, base=225)
+glow(lambda g, c: g.polygon([(px * S, py * S) for px, py in bi], fill=c + (230,)), VIOLET, 14, 1.2)
+lit(auto_window, base=44, bevel=6, k=2.4, invert=True, tint=(0.75, 0.62, 1.7), mul=1.0)
+D().line([(px * S, py * S) for px, py in bi + [bi[0]]], fill=(130, 110, 255, 255), width=int(2.5 * S))
+auto_mask = metal_label((bx + bw / 2, by + bh / 2 + 3), "AUTO MIX", 27, glow_col=VIOLET, glow_str=1.3, base=225)
 for px, py in [(bx + 18, by + 12), (bx + bw - 18, by + 12), (bx + 10, by + bh - 10), (bx + bw - 10, by + bh - 10)]: screw(px, py, 4)
 
 # BOTTOM LEFT: meters
 panel(18, 478, 400, 200, cut=18)
-meter(44, 522, 346, 22, "INPUT", 0.55); meter(44, 574, 346, 22, "OUTPUT", 0.68); meter(44, 626, 346, 22, "GAIN REDUCTION", 0.30)
+meter(44, 522, 346, 22, "INPUT", 0.55); meter(44, 574, 346, 22, "OUTPUT", 0.68)
+for rx, rl in ((44, "LATENCY"), (227, "TRUE PEAK")):                     # recessed readout windows (values are drawn live)
+    rm = Image.new("L", canvas.size, 0); ImageDraw.Draw(rm).rounded_rectangle([rx * S, 614 * S, (rx + 163) * S, 656 * S], 5 * S, fill=255)
+    lit(rm, base=20, bevel=3, k=2.0, invert=True, mul=0.7)
+    D().rounded_rectangle([rx * S, 614 * S, (rx + 163) * S, 656 * S], 5 * S, outline=(0, 0, 0, 255), width=2 * S)
+    D().rounded_rectangle([(rx - 2) * S, 612 * S, (rx + 165) * S, 658 * S], 6 * S, outline=(110, 110, 125, 255), width=S)
+    metal_label((rx + 81.5, 623.5), rl, 9.5, anchor_="mm", glow_col=None)
 
 # BOTTOM RIGHT: controls
 panel(682, 478, 400, 200, cut=18)
 knob(746, 566, "MIX", 0.72, r=26, accent=VIOLET); knob(841, 566, "OUTPUT", 0.5, r=26)
-button(905, 512, 150, 34, "BYPASS", False, RED, 13, name="bypass")
+button(905, 512, 150, 34, "BYPASS", False, MAGENTA, 13, name="bypass")
 button(905, 556, 70, 34, "A", True, VIOLET, 15, name="a"); button(985, 556, 70, 34, "B", False, VIOLET, 15, name="b")
-button(905, 600, 150, 34, "LEVEL MATCH", True, RED, 12, name="level")
+button(905, 600, 70, 34, "RESET", False, RED, 12, name="reset"); button(985, 600, 70, 34, "PRESETS", False, RED, 11, name="presets")
 
 # BOTTOM CENTER: hexagon emblem plate with the embossed "V" mark
 hexp = [(550 + 112 * math.cos(math.radians(60 * i)), 598 + 78 * math.sin(math.radians(60 * i))) for i in range(6)]
@@ -383,10 +399,7 @@ D().line([(px * S, py * S) for px, py in hexp + [hexp[0]]], fill=(3, 3, 6, 255),
 hi = [(550 + 90 * math.cos(math.radians(60 * i)), 598 + 60 * math.sin(math.radians(60 * i))) for i in range(6)]
 lit(poly_mask(hi), base=24, bevel=6, k=2.2, invert=True, mul=0.7)
 D().line([(px * S, py * S) for px, py in hi + [hi[0]]], fill=(0, 0, 0, 255), width=2 * S)
-V = [(550 + (x - 550) * 0.58, 570 + (y - 601) * 0.58) for x, y in [(512, 572), (537, 572), (550, 604), (563, 572), (588, 572), (558, 630), (542, 630)]]
-glow(lambda g, c: g.polygon([(x * S, y * S) for x, y in V], outline=c + (255,), width=3 * S), RED, 6, 1.4)
-dropshadow(V, 3, 3, 220); lit(poly_mask(V), base=190, bevel=2.2, k=2.6)
-button(487, 610, 126, 32, "ADVANCED", False, VIOLET, 12, name="adv")
+button(480, 578, 140, 40, "ADVANCED", False, VIOLET, 14, name="adv")
 
 # MILITARY CHAINS: three per side from each side panel to the red display, plus two to AUTO MIX
 for py_panel, py_oct in ((190, 222), (262, 262), (334, 302)):
@@ -400,8 +413,8 @@ BASE = canvas.copy()
 # ======================= ANIMATED LAYERS =======================
 class FlameFx:
     """Looping procedural flames rising from the lettering shape (drawn behind the letters)."""
-    def __init__(self, clip_mask, src_mask, rise, strength, seed, g_ramp=(30, 20, 40, 135, 228), b_ramp=(210, 110, 50, 40, 150), exclude=None):
-        self.g_ramp, self.b_ramp = g_ramp, b_ramp
+    def __init__(self, clip_mask, src_mask, rise, strength, seed, r_ramp=(70, 70, 90, 170, 255), g_ramp=(20, 60, 150, 230, 255), b_ramp=(220, 255, 255, 255, 255), exclude=None):
+        self.r_ramp, self.g_ramp, self.b_ramp = r_ramp, g_ramp, b_ramp
         bb = src_mask.getbbox()
         self.box = (max(0, bb[0] - 24 * S), max(0, bb[1] - int((rise + 24) * S)), min(CW, bb[2] + 24 * S), min(CH, bb[3] + 12 * S))
         sm = np.asarray(src_mask.crop(self.box), np.float32) / 255; h, w = sm.shape
@@ -422,7 +435,7 @@ class FlameFx:
         heat = self.heat0[np.clip((self.ys + fy).astype(int), 0, self.h - 1), np.clip((self.xs + fx).astype(int), 0, self.w - 1)]
         v = np.clip(heat * (0.35 + 1.35 * t) + self.sm * 0.25, 0, 1.2)
         st = [0, 0.15, 0.4, 0.7, 1.0]
-        col = np.stack([np.interp(v, st, [110, 205, 255, 255, 255]), np.interp(v, st, self.g_ramp), np.interp(v, st, self.b_ramp)], -1)
+        col = np.stack([np.interp(v, st, self.r_ramp), np.interp(v, st, self.g_ramp), np.interp(v, st, self.b_ramp)], -1)
         a = (np.clip((v - 0.06) * 2.0, 0, 1) * self.strength * self.clip)[..., None]
         reg = np.asarray(img.crop(self.box), np.float32)
         img.paste(Image.fromarray(np.clip(reg * (1 - a) + col * a, 0, 255).astype(np.uint8)), self.box[:2])
@@ -452,11 +465,11 @@ class Embers:
 # --- display contents (kept in its own style, NOT the V lettering) ---
 BOX_O = (int((cx - 135) * S), int((cy - 135) * S), int((cx + 135) * S), int((cy + 135) * S))
 txt = Image.new("RGBA", canvas.size, (0, 0, 0, 0)); td = ImageDraw.Draw(txt)
-td.text((cx * S, (cy - 80) * S), "VOCAL PROFILE", font=font(13), fill=(255, 205, 225, 255), anchor="mm")
+td.text((cx * S, (cy - 80) * S), "VOCAL PROFILE", font=font(13), fill=(205, 215, 255, 255), anchor="mm")
 td.rounded_rectangle([(cx - 92) * S, (cy - 64) * S, (cx + 92) * S, (cy - 34) * S], 4 * S, fill=(8, 0, 12, 235), outline=(150, 50, 110, 255), width=S)
 td.text((cx * S, (cy - 49) * S), "◀  MODERN RAP  ▶", font=font(16), fill=WHITE + (255,), anchor="mm")
-td.text((cx * S, (cy + 8) * S), "MIX AMOUNT", font=font(13), fill=(255, 205, 225, 255), anchor="mm")
-td.text((cx * S, (cy + 52) * S), "72 %", font=font(40), fill=(255, 225, 230, 255), anchor="mm")
+td.text((cx * S, (cy + 8) * S), "MIX AMOUNT", font=font(13), fill=(205, 215, 255, 255), anchor="mm")
+td.text((cx * S, (cy + 52) * S), "72 %", font=font(40), fill=(225, 230, 255, 255), anchor="mm")
 TXT_O = txt.crop(BOX_O)
 gl = Image.new("RGBA", canvas.size, (0, 0, 0, 0)); ImageDraw.Draw(gl).text((cx * S, (cy + 52) * S), "72 %", font=font(40), fill=RED + (255,), anchor="mm")
 GLOW_O = gl.crop(BOX_O).filter(ImageFilter.GaussianBlur(6 * S))
@@ -469,16 +482,16 @@ RAD = np.clip(1 - rr[GBOX[1]:GBOX[3], GBOX[0]:GBOX[2]], 0, 1) ** 1.5
 fire_src = Image.new("L", canvas.size, 0)
 ImageDraw.Draw(fire_src).rectangle([262 * S, 80 * S, 838 * S, 90 * S], fill=175)
 FX = [
-    # VONOX: red/orange flame only (no pale-yellow core), same family as the AUTO MIX flame
-    FlameFx(title_window, fire_src, rise=54, strength=0.95, seed=3, g_ramp=(30, 20, 36, 70, 105), b_ramp=(210, 110, 50, 36, 50), exclude=vonox_mask),
-    FlameFx(auto_window, auto_mask, rise=20, strength=0.55, seed=11),
+    # galaxy flames: violet -> magenta nebula in the title, violet -> blue -> cyan in AUTO MIX
+    FlameFx(title_window, fire_src, rise=54, strength=0.95, seed=3, r_ramp=(60, 110, 190, 255, 255), g_ramp=(14, 24, 55, 140, 230), b_ramp=(180, 235, 255, 255, 255), exclude=vonox_mask),
+    FlameFx(auto_window, auto_mask, rise=20, strength=0.6, seed=11, r_ramp=(50, 60, 90, 150, 230), g_ramp=(20, 50, 120, 220, 255), b_ramp=(200, 255, 255, 255, 255)),
 ]
 EMBERS = [
-    Embers(26, (430, 670), 484, 34, auto_window, 21, size=(0.9, 2.2), palette=((255, 210, 130), (255, 140, 60), (255, 90, 70)), exclude=auto_mask),
-    Embers(80, (266, 834), 88, 60, title_window, 5, size=(0.9, 2.6), palette=((255, 70, 70), (255, 100, 110), (255, 60, 130), (210, 90, 255)), exclude=vonox_mask, gain=1.4, amp=(2, 12)),
-    Embers(12, (270, 830), 90, 54, title_window, 9, size=(3, 6), palette=((200, 40, 60), (160, 60, 220)), blur=4.0, gain=2.0, exclude=vonox_mask, amp=(6, 16)),
+    Embers(26, (430, 670), 484, 34, auto_window, 21, size=(0.9, 2.2), palette=((255, 255, 255), (190, 210, 255), (170, 130, 255)), exclude=auto_mask),
+    Embers(80, (266, 834), 88, 60, title_window, 5, size=(0.9, 2.6), palette=((255, 255, 255), (200, 215, 255), (255, 150, 230), (150, 120, 255)), exclude=vonox_mask, gain=1.4, amp=(2, 12)),
+    Embers(12, (270, 830), 90, 54, title_window, 9, size=(3, 6), palette=((90, 80, 220), (160, 60, 220)), blur=4.0, gain=2.0, exclude=vonox_mask, amp=(6, 16)),
     Embers(70, (440, 660), cy + 112, 215, glass_mask, 31, size=(1.0, 2.6), palette=((255, 90, 80), (255, 60, 110), (255, 150, 90), (190, 100, 255)), blur=2.2, gain=1.7, amp=(4, 16)),
-    Embers(12, (450, 650), cy + 115, 200, glass_mask, 47, size=(4, 9), palette=((200, 40, 60), (160, 60, 220)), blur=5.0, gain=2.2, amp=(8, 22)),
+    Embers(12, (450, 650), cy + 115, 200, glass_mask, 47, size=(4, 9), palette=((90, 80, 220), (160, 60, 220)), blur=5.0, gain=2.2, amp=(8, 22)),
 ]
 
 SHINE_NP = np.asarray(SHINE, np.float32) / 255
@@ -490,7 +503,7 @@ def render_frame(phase, shine=True):
     pulse = 0.5 + 0.5 * math.sin(2 * math.pi * phase)
     # display: breathing red glow, then particles, then readout on top
     reg = np.asarray(img.crop(GBOX), np.float32)
-    reg += RAD[..., None] * GCLIP[..., None] * np.array([255, 35, 45], np.float32) * (0.08 + 0.16 * pulse)
+    reg += RAD[..., None] * GCLIP[..., None] * np.array([110, 60, 255], np.float32) * (0.08 + 0.16 * pulse)
     img.paste(Image.fromarray(np.clip(reg, 0, 255).astype(np.uint8)), GBOX[:2])
     for em in EMBERS[3:]: em.render(img, phase)
     reg = img.crop(BOX_O).convert("RGBA")

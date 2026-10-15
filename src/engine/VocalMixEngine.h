@@ -105,12 +105,13 @@ public:
         const double dynNeed = std::clamp((p.dynamicRangeDb - 4.0) / 12.0, 0.0, 1.0);
         const double depth = b.compDepth * (0.4 + 0.6 * dynNeed);       // consistent voice => less
         const double ref = p.rmsDb;                                     // thresholds track level
-        m.fetThreshDb = ref + 2.0 - 6.0 * depth;
-        m.fetRatio = 2.5 + 2.0 * depth;
+        // Gentle by design: the FET only catches the loudest peaks (2..5 dB below the measured peak, ratio <= 3.6:1)
+        m.fetThreshDb = p.peakDb - 2.0 - 3.0 * depth;
+        m.fetRatio = 2.0 + 1.6 * depth;
         m.fetAttackMs = 4.0 + 8.0 * (1.0 - depth);
         m.fetReleaseMs = 50.0 + 70.0 * (1.0 - depth);
-        m.optoThreshDb = ref - 1.0 - 4.0 * depth * (0.5 + 0.5 * dynNeed);
-        m.optoRatio = 1.5 + 0.9 * depth;
+        m.optoThreshDb = ref - 2.0 - 3.0 * depth * (0.5 + 0.5 * dynNeed);
+        m.optoRatio = 1.4 + 0.7 * depth;
 
         // --- De-esser scales with measured sibilance ---
         m.deEssHz = 6000.0 + 2500.0 * (1.0 - p.brightness);             // brighter voice => lower focus
@@ -143,7 +144,7 @@ public:
         const bool v = p.valid;
         const double noise = (v && p.noisy) ? 0.5 : 1.0;
         const double bright = v ? p.brightness : 0.5, dyn = v ? std::clamp((p.dynamicRangeDb - 4.0) / 12.0, 0.0, 1.0) : 0.5;
-        m.parCompAmount = std::clamp(f.parComp * (0.6 + 0.8 * dyn), 0.0, 1.0);
+        m.parCompAmount = std::clamp(f.parComp * (0.5 + 0.5 * dyn), 0.0, 0.25);
         m.exciterAmount = std::clamp(f.exciter * (1.3 - 1.0 * bright) * noise, 0.0, 1.0);
         m.reverbMode = f.rvMode; m.reverbAmount = f.rv * noise; m.reverbDecay = f.rvDecay;
         m.reverbDamp = std::clamp(f.rvDamp + 0.3 * bright, 0.0, 0.95);

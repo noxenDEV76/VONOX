@@ -1,3 +1,27 @@
+## VONOX 0.4.0: galaxy
+
+Your FL Studio feedback, applied.
+
+**New**
+- **Galaxy theme**: black window with moving white stars, violet / blue nebula flames, nebula glass in the centre. The steel / chains design is unchanged.
+- **Voice-reactive stars** inside the big MIX AMOUNT octagon: calm when quiet, brighter and agitated with the loudness of the voice.
+- **ADVANCED** is now the big button in the hexagon (the V is gone), written in full.
+- **RESET** button (all parameters back to Default) and **PRESETS** button.
+- One factory preset, **Default** = the author's tuned settings (main knobs and every ADVANCED value). Your own presets can still be saved.
+- New fonts (Orbitron, Rajdhani; SIL OFL, see plugin/assets/fonts), nicer LATENCY and TRUE PEAK readouts, the status text now sits inside the glass.
+- Small animations: button ripples, cross-fades and a star burst on AUTO MIX, knob hover halo and drag glow.
+- ADVANCED panel: black starfield background like the preset browser, metal knobs with a knurled edge.
+
+**Fixed**
+- **BYPASS did nothing** (the button never toggled) and showed no state. It now works and the whole plugin dims with a "BYPASSED" notice in the glass.
+- The white hover square on buttons is gone (rounded glow instead).
+- **AUTO MIX over-compressed**: the FET now only catches the loudest peaks (threshold 2-5 dB below the measured peak, ratio at most 3.6:1), the opto is gentler (1.4-2.1:1) and parallel compression is capped at 25 %.
+
+**Removed**
+- The 80 other presets (artist, style and FX presets), the GAIN REDUCTION meter, the LEVEL MATCH button (the parameter stays in the file format for old projects but has no control), and the circles drawn on the knobs.
+
+**Honest status**: see docs/STATUS.md. Automated tests on synthetic signals pass; no listening tests and no DAW test by the author.
+
 ## VONOX 0.3.0: the voice release
 
 0.2.0 added space and colour. 0.3.0 adds the voice tools that were missing.

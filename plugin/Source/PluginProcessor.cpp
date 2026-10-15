@@ -76,23 +76,19 @@ void VonoxProcessor::writeValues(const std::array<float, params::kNumFloats>& v)
 }
 
 void VonoxProcessor::applyPreset(int index) {
-    const auto& ps = factoryPresets();
-    if (index < 0 || index >= int(ps.size())) return;
-    const auto& pr = ps[size_t(index)];
-    auto m = applyCharacter(engine::VocalMixEngine::compute(typicalProfile(), pr.style), pr);
-    setParam(params::kStyleId, float(int(pr.style)));
-    writeValues(params::fromSettings(m));
-    setParam(params::kRvModeId, float(m.reverbMode)); setParam(params::kDlModeId, float(m.delayMode)); setParam(params::kDlDivId, float(m.delayDiv));
-    setParam("space", 0.5f); setParam("character", 0.5f);
-    setParam("compress", float(pr.compress)); setParam("mix", float(pr.mix));
-    setParam(params::kSatModeId, float(int(m.satMode)));
-    // voice stages (defaults are written too, so a preset never inherits the previous preset's tuning / harmonies)
-    setParam("tune", float(pr.tune)); setParam("retune", float(pr.retune)); setParam("humanize", float(pr.humanize));
-    setParam("harm1_gain", float(pr.harm1Gain)); setParam("harm2_gain", float(pr.harm2Gain)); setParam("oct_down", float(pr.octDown)); setParam("oct_up", float(pr.octUp));
-    setParam(params::kHarm1Id, float(pr.harm1Gain > 0 ? pr.harm1 : 1)); setParam(params::kHarm2Id, float(pr.harm2Gain > 0 ? pr.harm2 : 3));
-    if (pr.scale >= 0) setParam(params::kScaleId, float(pr.scale));
-    setParam("bandlimit", float(pr.bandLimit)); setParam("nr_amount", float(pr.nr)); setParam(params::kAdlibId, pr.adlib ? 1.f : 0.f);
+    if (index < 0 || index >= int(factoryPresets().size())) return;
+    resetToDefault();
     currentProgram = index; presetActive = true;
+}
+
+// Every parameter (floats, choices, toggles) back to its declared default = the "Default" preset.
+void VonoxProcessor::resetToDefault() {
+    for (auto* par : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(par)) {
+            if (rp->paramID == juce::String(params::kBypassId)) continue;      // bypass is a monitoring switch, not part of a sound
+            rp->beginChangeGesture(); rp->setValueNotifyingHost(rp->getDefaultValue()); rp->endChangeGesture();
+        }
+    currentProgram = 0; presetActive = true;
 }
 
 void VonoxProcessor::runAutoMix() {

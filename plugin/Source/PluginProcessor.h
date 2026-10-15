@@ -39,6 +39,7 @@ public:
 
     // ---- features used by the editor ----
     void applyPreset(int index);
+    void resetToDefault();                      // RESET button: all parameters back to the Default preset
     void runAutoMix();                          // analyses the captured input, then writes the parameters
     juce::String analysisText() const;          // last AUTO MIX result (thread-safe copy)
     bool analysisBusy() const { return busy.load(); }

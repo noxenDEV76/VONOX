@@ -1,9 +1,20 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
 using namespace vonox;
-
-static const juce::Colour RED(255, 40, 60), VIOLET(150, 70, 255);
+using theme::blue; using theme::violet; using theme::magenta; using theme::cyan; using theme::lavender;
 static constexpr float kPi = juce::MathConstants<float>::pi;
+
+namespace vfont {
+static juce::Typeface::Ptr load(const char* name) {
+    int sz = 0; const char* d = BinaryData::getNamedResource(name, sz);
+    return d ? juce::Typeface::createSystemTypefaceFor(d, size_t(sz)) : nullptr;
+}
+juce::Font orbitron(float h) { static auto t = load("Orbitron_Bold_sub_ttf"); return t ? juce::Font(juce::FontOptions(t).withHeight(h)) : juce::Font(juce::FontOptions(h, juce::Font::bold)); }
+juce::Font rajdhani(float h, bool semi) {
+    static auto b = load("Rajdhani_Bold_sub_ttf"); static auto s = load("Rajdhani_SemiBold_sub_ttf"); auto t = semi ? s : b;
+    return t ? juce::Font(juce::FontOptions(t).withHeight(h)) : juce::Font(juce::FontOptions(h, semi ? juce::Font::plain : juce::Font::bold));
+}
+}
 
 juce::Image VonoxEditor::res(const char* name) {
     int sz = 0; const char* d = BinaryData::getNamedResource(name, sz);
@@ -21,35 +32,70 @@ void VonoxKnob::paint(juce::Graphics& g) {
     const auto c = juce::Point<float>(getWidth() * 0.5f, kTopPad + (getHeight() - kTopPad) * 0.5f);
     const float norm = float(valueToProportionOfLength(getValue()));
     const float a0 = 225.f * kPi / 180.f, a1 = a0 + 270.f * kPi / 180.f * norm, rr = float(r) + 7.f;
+    if (hover > 0.01f) {   // soft halo around the knob (radial fade, not an outline)
+        juce::ColourGradient gr(accent.withAlpha(0.30f * hover), c.x, c.y, accent.withAlpha(0.f), c.x + r + 22.f, c.y, true);
+        gr.addColour(float(r) / (r + 22.f), accent.withAlpha(0.f));
+        g.setGradientFill(gr); g.fillEllipse(c.x - r - 22.f, c.y - r - 22.f, 2.f * (r + 22.f), 2.f * (r + 22.f));
+    }
     juce::Path track; track.addCentredArc(c.x, c.y, rr, rr, 0.f, a0, a0 + 270.f * kPi / 180.f, true);
     g.setColour(juce::Colours::black.withAlpha(0.67f)); g.strokePath(track, juce::PathStrokeType(3.f));
     if (norm > 0.001f) {
         juce::Path val; val.addCentredArc(c.x, c.y, rr, rr, 0.f, a0, a1, true);
-        g.setColour(accent.withAlpha(0.22f)); g.strokePath(val, juce::PathStrokeType(9.f));
-        g.setColour(accent.withAlpha(0.35f)); g.strokePath(val, juce::PathStrokeType(6.f));
-        g.setColour(accent); g.strokePath(val, juce::PathStrokeType(3.f));
+        const float k = 1.f + 0.6f * pulse + 0.3f * hover;
+        g.setColour(accent.withAlpha(juce::jmin(1.f, 0.22f * k))); g.strokePath(val, juce::PathStrokeType(9.f + 3.f * pulse));
+        g.setColour(accent.withAlpha(juce::jmin(1.f, 0.35f * k))); g.strokePath(val, juce::PathStrokeType(6.f));
+        g.setColour(accent.brighter(0.5f * pulse)); g.strokePath(val, juce::PathStrokeType(3.f));
+        if (pulse > 0.05f) {   // spark at the tip of the arc while the value changes
+            const float tx = c.x + std::sin(a1) * rr, ty = c.y - std::cos(a1) * rr;
+            g.setColour(juce::Colours::white.withAlpha(pulse * 0.8f)); g.fillEllipse(tx - 2.5f, ty - 2.5f, 5.f, 5.f);
+            g.setColour(accent.withAlpha(pulse * 0.4f)); g.fillEllipse(tx - 7.f, ty - 7.f, 14.f, 14.f);
+        }
     }
     g.drawImageAt(body, juce::roundToInt(c.x - body.getWidth() * 0.5f), juce::roundToInt(c.y - body.getHeight() * 0.5f));
     const float R = float(r);
-    g.setColour(accent);
+    g.setColour(accent.brighter(0.3f * pulse));
     g.drawLine(c.x + std::sin(a1) * R * .22f, c.y - std::cos(a1) * R * .22f, c.x + std::sin(a1) * R * .84f, c.y - std::cos(a1) * R * .84f, 3.f);
     if (isMouseOverOrDragging() || isMouseButtonDown()) {
         auto t = juce::String(getValue(), dec) + " " + unit;
-        auto bub = juce::Rectangle<float>(0, 0, 74.f, 20.f).withCentre({ c.x, 10.f });
-        g.setColour(juce::Colour(8, 0, 12).withAlpha(0.92f)); g.fillRoundedRectangle(bub, 4.f);
-        g.setColour(accent); g.drawRoundedRectangle(bub, 4.f, 1.f);
-        g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(13.f, juce::Font::bold));
+        auto bub = juce::Rectangle<float>(0, 0, 78.f, 20.f).withCentre({ c.x, 10.f });
+        g.setColour(juce::Colour(4, 4, 12).withAlpha(0.94f)); g.fillRoundedRectangle(bub, 5.f);
+        g.setColour(accent.withAlpha(0.9f)); g.drawRoundedRectangle(bub, 5.f, 1.f);
+        g.setColour(juce::Colours::white); g.setFont(vfont::orbitron(11.f));
         g.drawText(t.trim(), bub.toNearestInt(), juce::Justification::centred);
     }
 }
 
+void MiniKnob::paint(juce::Graphics& g) {
+    const float cx = getWidth() * 0.5f, cy = 21.f, r = 15.f;
+    const float norm = float(valueToProportionOfLength(getValue())), a0 = 225.f * 0.0174533f, a1 = a0 + 270.f * 0.0174533f * norm;
+    juce::Path tr; tr.addCentredArc(cx, cy, r + 4, r + 4, 0.f, a0, a0 + 270.f * 0.0174533f, true);
+    g.setColour(juce::Colour(40, 44, 66)); g.strokePath(tr, juce::PathStrokeType(2.5f));
+    if (norm > 0.001f) { juce::Path v; v.addCentredArc(cx, cy, r + 4, r + 4, 0.f, a0, a1, true); g.setColour(accent.withAlpha(0.35f)); g.strokePath(v, juce::PathStrokeType(6.f)); g.setColour(accent); g.strokePath(v, juce::PathStrokeType(2.5f)); }
+    g.setColour(juce::Colours::black.withAlpha(0.55f)); g.fillEllipse(cx - r, cy - r + 2.f, 2 * r, 2 * r);                       // drop shadow
+    { juce::ColourGradient m(juce::Colour(238, 240, 250), cx - 5.f, cy - 6.f, juce::Colour(70, 74, 96), cx + r, cy + r, true);   // metal body
+      m.addColour(0.45, juce::Colour(150, 156, 178)); g.setGradientFill(m); g.fillEllipse(cx - r, cy - r, 2 * r, 2 * r); }
+    for (int i = 0; i < 30; ++i) {                                                                                               // knurled edge: turns with the knob
+        const float a = a1 + i * (2.f * kPi / 30.f), s = std::sin(a), c = std::cos(a);
+        g.setColour(juce::Colour(20, 22, 38).withAlpha(0.55f)); g.drawLine(cx + s * (r - 3.2f), cy - c * (r - 3.2f), cx + s * (r - 0.6f), cy - c * (r - 0.6f), 1.2f);
+        const float a2 = a + kPi / 30.f; g.setColour(juce::Colours::white.withAlpha(0.35f)); g.drawLine(cx + std::sin(a2) * (r - 3.f), cy - std::cos(a2) * (r - 3.f), cx + std::sin(a2) * (r - 0.8f), cy - std::cos(a2) * (r - 0.8f), 0.8f);
+    }
+    { const float ri = r - 5.2f; juce::ColourGradient cap(juce::Colour(46, 50, 74), cx + 3.f, cy + 4.f, juce::Colour(150, 156, 182), cx - ri, cy - ri, true);
+      g.setGradientFill(cap); g.fillEllipse(cx - ri, cy - ri, 2 * ri, 2 * ri);
+      for (int k = 1; k <= 3; ++k) { juce::Path br; br.addCentredArc(cx, cy, ri * k / 3.4f, ri * k / 3.4f, 0.f, 0.3f + k, 2.3f + k, true); g.setColour(juce::Colours::white.withAlpha(0.10f)); g.strokePath(br, juce::PathStrokeType(0.8f)); } }
+    g.setColour(accent.brighter(0.3f)); g.drawLine(cx + std::sin(a1) * 2.5f, cy - std::cos(a1) * 2.5f, cx + std::sin(a1) * (r - 3.f), cy - std::cos(a1) * (r - 3.f), 2.4f);
+    g.setColour(lavender); g.setFont(vfont::rajdhani(13.f));
+    g.drawText(juce::String(getValue(), dec) + (unit.isEmpty() ? "" : " " + unit), 0, 40, getWidth(), 14, juce::Justification::centred);
+    g.setColour(juce::Colours::white.withAlpha(0.85f)); g.setFont(vfont::rajdhani(11.5f, true));
+    g.drawFittedText(label, 2, 54, getWidth() - 4, 24, juce::Justification::centredTop, 2);
+}
+
 VonoxEditor::VonoxEditor(VonoxProcessor& p)
     : AudioProcessorEditor(&p), proc(p),
-      bypassBtn("bypass", res("btn_bypass_on_png"), res("btn_bypass_off_png")), aBtn("a", res("btn_a_on_png"), res("btn_a_off_png")),
-      bBtn("b", res("btn_b_on_png"), res("btn_b_off_png")), levelBtn("level", res("btn_level_on_png"), res("btn_level_off_png")),
-      advBtn("adv", res("btn_adv_on_png"), res("btn_adv_off_png")) {
+      bypassBtn("bypass", res("btn_bypass_on_png"), res("btn_bypass_off_png"), magenta), aBtn("a", res("btn_a_on_png"), res("btn_a_off_png")),
+      bBtn("b", res("btn_b_on_png"), res("btn_b_off_png")), resetBtn("reset", res("btn_reset_on_png"), res("btn_reset_off_png"), cyan),
+      presetsBtn("presets", res("btn_presets_on_png"), res("btn_presets_off_png"), violet), advBtn("adv", res("btn_adv_on_png"), res("btn_adv_off_png"), violet) {
     background = res("background_png"); fireTitle = res("fire_title_jpg"); fireAuto = res("fire_auto_jpg");
-    setSize(1100, 700); setResizable(false, false);
+    setSize(1100, 700); setResizable(false, false); setOpaque(true);
 
     const auto b29 = res("knob_body_29_png"), b26 = res("knob_body_26_png");
     struct K { int cx, cy, r; int param; bool violet; const char* unit; int dec; };
@@ -61,7 +107,7 @@ VonoxEditor::VonoxEditor(VonoxProcessor& p)
         { 746, 566, 26, params::mix, true, "%", 0 },        { 841, 566, 26, params::output, false, "dB", 1 },
     };
     for (const auto& k : ks) {
-        auto kn = std::make_unique<VonoxKnob>(k.r == 29 ? b29 : b26, k.violet ? VIOLET : RED, k.r, k.unit, k.dec);
+        auto kn = std::make_unique<VonoxKnob>(k.r == 29 ? b29 : b26, k.violet ? violet : blue, k.r, k.unit, k.dec);
         const int half = k.r + 12;
         kn->setBounds(k.cx - half, k.cy - half - VonoxKnob::kTopPad, half * 2, half * 2 + VonoxKnob::kTopPad);
         auto* par = proc.apvts.getParameter(params::kFloats[k.param].id);
@@ -71,28 +117,39 @@ VonoxEditor::VonoxEditor(VonoxProcessor& p)
         if (k.param == params::mix) mixKnob = kn.get();
         addAndMakeVisible(*kn); knobs.push_back(std::move(kn));
     }
-    // The 72 % readout in the octagon is a second view of MIX: hide the duplicate knob drag area by using it as a zone below.
-    auto place = [this](juce::Component& c, int x, int y, int w, int h) { c.setBounds(x - 4, y - 4, w + 8, h + 8); addAndMakeVisible(c); };
-    place(bypassBtn, 905, 512, 150, 34); place(aBtn, 905, 556, 70, 34); place(bBtn, 985, 556, 70, 34); place(levelBtn, 905, 600, 150, 34); place(advBtn, 487, 610, 126, 32);
+    // sprites carry an 8 px transparent margin around the button
+    auto place = [this](SpriteButton& c, int x, int y) { c.setBounds(x - 8, y - 8, c.imgOff.getWidth(), c.imgOff.getHeight()); addAndMakeVisible(c); };
+    place(bypassBtn, 905, 512); place(aBtn, 905, 556); place(bBtn, 985, 556); place(resetBtn, 905, 600); place(presetsBtn, 985, 600); place(advBtn, 480, 578);
     browser = std::make_unique<PresetBrowser>(proc); browser->setBounds(getLocalBounds()); addChildComponent(*browser);
     adv = std::make_unique<AdvancedPanel>(proc, background); adv->setBounds(18, 118, 1064, 304); addAndMakeVisible(*adv); adv->setVisible(false);
     advBtn.onClick = [this] { adv->setVisible(!adv->isVisible()); advBtn.setToggleState(adv->isVisible(), juce::dontSendNotification); advBtn.toFront(false); };
     advBtn.setTooltip("Advanced: every module parameter (EQ, compressors, de-esser, saturation, reverb, delay, doubler, chorus)");
     autoBtn.setBounds(428, 428, 244, 74); addAndMakeVisible(autoBtn);
-    autoBtn.onClick = [this] { proc.runAutoMix(); };
+    autoBtn.onClick = [this] { proc.runAutoMix(); burst(550.f, 466.f); };
+    bypassBtn.setClickingTogglesState(true);        // ButtonParameterAttachment does not do this by itself (this was the "Bypass does nothing" bug)
     bypassAtt = std::make_unique<juce::ButtonParameterAttachment>(*proc.apvts.getParameter(params::kBypassId), bypassBtn);
-    levelAtt = std::make_unique<juce::ButtonParameterAttachment>(*proc.apvts.getParameter(params::kLevelMatchId), levelBtn);
     aBtn.onClick = [this] { proc.switchAB(0); };
     bBtn.onClick = [this] { proc.switchAB(1); };
+    resetBtn.onClick = [this] { proc.resetToDefault(); statusLine = "All parameters reset to Default."; };
+    presetsBtn.onClick = [this] { browser->open(); };
     aBtn.setTooltip("Slot A"); bBtn.setTooltip("Slot B: the first time you open it, it starts as a copy of A");
-    bypassBtn.setTooltip("Bypass (10 ms crossfade, no latency)"); levelBtn.setTooltip("Level Match: compensates the loudness of the processing so A/B is fair");
+    bypassBtn.setTooltip("Bypass: passes the audio through untouched (delay-matched, 10 ms crossfade)");
+    resetBtn.setTooltip("Reset every parameter to the Default preset"); presetsBtn.setTooltip("Preset browser: Default and your own saved presets");
     autoBtn.setTooltip("Analyses the audio captured while playing and sets the whole chain");
     aBtn.setToggleState(proc.activeSlot() == 0, juce::dontSendNotification); bBtn.setToggleState(proc.activeSlot() == 1, juce::dontSendNotification);
     statusLine = proc.analysisText();
-    for (int i = 0; i < 70; ++i) parts.push_back({ 0, 0, 0, 0, -1.f, 1.f });
-    startTimerHz(24);
+    stars.init(150, 1100.f, 700.f, 0.22f);
+    for (int i = 0; i < 8; ++i) { const float a = (22.5f + 45.f * i) * kPi / 180.f; juce::Point<float> pt(550.f + 108.f * std::cos(a), 262.f + 108.f * std::sin(a)); if (i == 0) glassPath.startNewSubPath(pt); else glassPath.lineTo(pt); }
+    glassPath.closeSubPath();
+    for (int i = 0; i < 80; ++i) { const float a = rng.nextFloat() * 6.28f, rd = std::sqrt(rng.nextFloat()) * 100.f;
+        voiceStars.push_back({ 550.f + std::cos(a) * rd, 262.f + std::sin(a) * rd, 0.f, 0.f, 0.9f + rng.nextFloat() * 1.6f, rng.nextFloat() * 6.28f, 0.4f + rng.nextFloat() * 0.6f }); }
+    startTimerHz(30);
 }
 VonoxEditor::~VonoxEditor() { stopTimer(); }
+
+void VonoxEditor::burst(float x, float y) {
+    for (int i = 0; i < 44; ++i) { const float a = rng.nextFloat() * 6.28f, s = 1.5f + rng.nextFloat() * 4.5f; bursts.push_back({ x, y, std::cos(a) * s, std::sin(a) * s * 0.8f - 0.8f, 1.f, 1.f + rng.nextFloat() * 2.2f }); }
+}
 
 void VonoxEditor::cycleStyle(int dir) {
     proc.presetActive = false;
@@ -109,96 +166,139 @@ void VonoxEditor::mouseUp(const juce::MouseEvent& e) {
 }
 
 void VonoxEditor::timerCallback() {
-    frame = (frame + 1) % 72;
+    frameF += 0.8f; if (frameF >= 72.f) frameF -= 72.f; frame = int(frameF);       // fire loops are 72 frames at 24 fps
     auto& m = proc.chain.meters;
     auto lvl = [](float db) { return juce::jlimit(0.f, 1.f, (db + 60.f) / 60.f); };
     auto smooth = [](float& cur, float t) { cur = t > cur ? t : cur + (t - cur) * 0.18f; };
     smooth(mIn, lvl(m.inPeakDb.load())); smooth(mOut, lvl(m.outPeakDb.load()));
-    smooth(mGr, juce::jlimit(0.f, 1.f, -m.gainReductionDb.load() / 18.f));
+    {   // voice intensity (RMS of what you hear, 0..1): fast attack, slower release
+        const float rms = juce::jmax(m.inRmsDb.load(), m.outRmsDb.load());
+        const float t = juce::jlimit(0.f, 1.f, (rms + 52.f) / 38.f);
+        level = t > level ? level + (t - level) * 0.6f : level + (t - level) * 0.12f;
+    }
     if (proc.autoMixCounter() != lastAutoCount) { lastAutoCount = proc.autoMixCounter(); statusLine = proc.analysisText(); autoBtn.setTooltip(statusLine); }
     autoBtn.busyFlag = proc.analysisBusy();
     aBtn.setToggleState(proc.activeSlot() == 0, juce::dontSendNotification); bBtn.setToggleState(proc.activeSlot() == 1, juce::dontSendNotification);
-    // ember particles inside the glass
-    for (auto& q : parts) {
-        if (q.life <= 0.f) { q = { 550.f + (rng.nextFloat() - .5f) * 200.f, 370.f + rng.nextFloat() * 10.f, -(0.6f + rng.nextFloat() * 1.6f), (rng.nextFloat() - .5f) * 0.6f, 1.f, 1.f + rng.nextFloat() * 2.2f }; }
-        q.x += q.vx + std::sin((q.y + q.size * 40.f) * 0.05f) * 0.3f; q.y += q.vy; q.life -= 0.012f + q.size * 0.002f;
+    bypassPulse += ((bypassBtn.getToggleState() ? 1.f : 0.f) - bypassPulse) * 0.2f;
+    stars.tick();
+    // stars inside the octagon: calm drift when quiet, agitated and brighter with the voice
+    for (auto& q : voiceStars) {
+        q.ph += 0.06f + level * 0.25f;
+        const float k = 0.04f + level * 1.2f;
+        q.vx += (rng.nextFloat() - .5f) * k; q.vy += (rng.nextFloat() - .5f) * k;
+        q.vx += (550.f - q.x) * 0.0012f; q.vy += (262.f - q.y) * 0.0012f;
+        q.vx *= 0.9f; q.vy *= 0.9f; q.x += q.vx; q.y += q.vy;
+        if (!glassPath.contains(q.x, q.y)) { const float a = rng.nextFloat() * 6.28f, rd = std::sqrt(rng.nextFloat()) * 95.f; q.x = 550.f + std::cos(a) * rd; q.y = 262.f + std::sin(a) * rd; q.vx = q.vy = 0.f; }
     }
-    repaint(235, 14, 630, 88); repaint(424, 424, 252, 82); repaint(420, 140, 260, 250);
-    repaint(40, 500, 360, 160); repaint(30, 424, 232, 24);
-    if (autoBtn.busyFlag) autoBtn.repaint();
+    for (auto& q : bursts) { q.x += q.vx; q.y += q.vy; q.vx *= 0.95f; q.vy = q.vy * 0.95f + 0.03f; q.life -= 0.028f; }
+    bursts.erase(std::remove_if(bursts.begin(), bursts.end(), [](const B& b) { return b.life <= 0.f; }), bursts.end());
+    for (auto* b : { &bypassBtn, &aBtn, &bBtn, &resetBtn, &presetsBtn, &advBtn }) b->tick();
+    autoBtn.tick();
+    for (auto& k : knobs) k->tick();
+    if (adv->isVisible()) adv->tick();
+    repaint();
 }
 
 void VonoxEditor::paint(juce::Graphics& g) {
+    g.fillAll(juce::Colours::black);
+    stars.paint(g);
+    g.setOpacity(1.f);                    // JUCE applies the last colour's alpha to drawImage: reset it or the artwork turns translucent
     g.drawImageAt(background, 0, 0);
     // animated fire strips (frames pre-rendered by tools/export_assets.py)
     const int th = 88, ah = 82;
     g.drawImage(fireTitle, 235, 14, 630, th, 0, frame * th, 630, th);
     g.drawImage(fireAuto, 424, 424, 252, ah, 0, frame * ah, 252, ah);
 
-    // octagon glass contents
-    juce::Path glass; for (int i = 0; i < 8; ++i) { const float a = (22.5f + 45.f * i) * kPi / 180.f; juce::Point<float> pt(550.f + 118.f * std::cos(a), 262.f + 118.f * std::sin(a)); if (i == 0) glass.startNewSubPath(pt); else glass.lineTo(pt); }
-    glass.closeSubPath();
+    // octagon glass: voice-reactive stars
     {
+        juce::Path glass; for (int i = 0; i < 8; ++i) { const float a = (22.5f + 45.f * i) * kPi / 180.f; juce::Point<float> pt(550.f + 118.f * std::cos(a), 262.f + 118.f * std::sin(a)); if (i == 0) glass.startNewSubPath(pt); else glass.lineTo(pt); }
+        glass.closeSubPath();
         juce::Graphics::ScopedSaveState ss(g); g.reduceClipRegion(glass);
-        for (auto& q : parts) if (q.life > 0.f) {
-            const float a = juce::jlimit(0.f, 1.f, q.life);
-            g.setColour(juce::Colour(255, 120, 120).withAlpha(0.18f * a)); g.fillEllipse(q.x - q.size * 2.2f, q.y - q.size * 2.2f, q.size * 4.4f, q.size * 4.4f);
-            g.setColour(juce::Colour(255, 200, 190).withAlpha(0.85f * a)); g.fillEllipse(q.x - q.size * .5f, q.y - q.size * .5f, q.size, q.size);
+        juce::ColourGradient gl(violet.withAlpha(0.04f + 0.30f * level), 550.f, 262.f, violet.withAlpha(0.f), 550.f + 118.f, 262.f, true);
+        g.setGradientFill(gl); g.fillRect(430, 140, 240, 240);
+        for (const auto& q : voiceStars) {
+            const float tw = 0.5f + 0.5f * std::sin(q.ph), sz = q.size * (1.f + level * 0.9f), a = q.a * (0.3f + 0.4f * tw + 0.5f * level);
+            const juce::Colour c = juce::Colours::white.interpolatedWith(cyan, juce::jlimit(0.f, 1.f, level * 1.2f));
+            g.setColour(c.withAlpha(juce::jmin(1.f, a) * 0.2f)); g.fillEllipse(q.x - sz * 2.2f, q.y - sz * 2.2f, sz * 4.4f, sz * 4.4f);
+            g.setColour(c.withAlpha(juce::jmin(1.f, a))); g.fillEllipse(q.x - sz * .5f, q.y - sz * .5f, sz, sz);
         }
     }
-    const juce::Colour pink(255, 205, 225);
-    g.setColour(pink); g.setFont(juce::FontOptions(13.f, juce::Font::bold));
-    g.drawText("VOCAL PROFILE", 450, 172, 200, 18, juce::Justification::centred);
-    g.setColour(juce::Colour(8, 0, 12).withAlpha(0.92f)); g.fillRoundedRectangle(styleBox.toFloat(), 4.f);
-    g.setColour(juce::Colour(150, 50, 110)); g.drawRoundedRectangle(styleBox.toFloat(), 4.f, 1.f);
+    g.setColour(lavender); g.setFont(vfont::orbitron(10.5f));
+    g.drawText("VOCAL PROFILE", 450, 173, 200, 16, juce::Justification::centred);
+    g.setColour(juce::Colour(4, 4, 14).withAlpha(0.9f)); g.fillRoundedRectangle(styleBox.toFloat(), 5.f);
+    g.setColour(violet.withAlpha(0.8f)); g.drawRoundedRectangle(styleBox.toFloat(), 5.f, 1.2f);
     const int si = juce::roundToInt(proc.apvts.getRawParameterValue(params::kStyleId)->load());
-    g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(16.f, juce::Font::bold));
-    g.drawText(juce::String(engine::styleName(static_cast<engine::Style>(juce::jlimit(0, 8, si)))).toUpperCase(), styleBox.reduced(26, 0), juce::Justification::centred);
-    g.drawText(juce::CharPointer_UTF8("\xe2\x97\x80"), leftArrow, juce::Justification::centred); g.drawText(juce::CharPointer_UTF8("\xe2\x96\xb6"), rightArrow, juce::Justification::centred);
-    if (proc.presetActive.load()) {
-        g.setColour(juce::Colour(255, 120, 170)); g.setFont(juce::FontOptions(11.f, juce::Font::bold));
-        g.drawFittedText(juce::String(displayName(factoryPresets()[size_t(proc.getCurrentProgram())])).toUpperCase(), 446, 232, 208, 18, juce::Justification::centred, 1);
+    g.setColour(juce::Colours::white); g.setFont(vfont::rajdhani(17.f));
+    g.drawFittedText(juce::String(engine::styleName(static_cast<engine::Style>(juce::jlimit(0, 8, si)))).toUpperCase(), styleBox.reduced(26, 0), juce::Justification::centred, 1);
+    g.setColour(cyan); g.drawText(juce::CharPointer_UTF8("\xe2\x97\x80"), leftArrow, juce::Justification::centred); g.drawText(juce::CharPointer_UTF8("\xe2\x96\xb6"), rightArrow, juce::Justification::centred);
+    if (proc.presetActive.load() && proc.getCurrentProgram() >= 0 && proc.getCurrentProgram() < int(factoryPresets().size())) {
+        g.setColour(cyan.withAlpha(0.85f)); g.setFont(vfont::rajdhani(12.f));
+        g.drawFittedText(juce::String(displayName(factoryPresets()[size_t(proc.getCurrentProgram())])).toUpperCase(), 466, 230, 168, 14, juce::Justification::centred, 1);
     }
-    g.setColour(pink); g.setFont(juce::FontOptions(13.f, juce::Font::bold));
-    g.drawText("MIX AMOUNT", 450, 262, 200, 18, juce::Justification::centred);
-    const juce::String pct = juce::String(juce::roundToInt(mixKnob->getValue())) + " %";
-    g.setFont(juce::FontOptions(40.f, juce::Font::bold));
-    g.setColour(RED.withAlpha(0.35f)); g.drawText(pct, 446, 290, 208, 56, juce::Justification::centred);
-    g.setColour(juce::Colour(255, 225, 230)); g.drawText(pct, 450, 290, 200, 56, juce::Justification::centred);
-    g.setFont(juce::FontOptions(10.5f)); g.setColour(pink.withAlpha(0.85f));
-    auto line = statusLine.upToFirstOccurrenceOf("\n", false, false);
-    g.drawFittedText(line, 452, 346, 196, 30, juce::Justification::centredTop, 2);
+    g.setColour(lavender); g.setFont(vfont::orbitron(10.5f));
+    g.drawText("MIX AMOUNT", 450, 254, 200, 16, juce::Justification::centred);
+    const juce::String pct = juce::String(juce::roundToInt(mixKnob->getValue())) + "%";
+    g.setFont(vfont::orbitron(34.f));
+    g.setColour(violet.withAlpha(0.45f + 0.3f * level)); g.drawText(pct, 446, 274, 208, 46, juce::Justification::centred);
+    g.setColour(juce::Colour(240, 236, 255)); g.drawText(pct, 450, 274, 200, 46, juce::Justification::centred);
+    g.setFont(vfont::rajdhani(12.f, true)); g.setColour(lavender.withAlpha(0.9f));
+    g.drawFittedText(statusLine.upToFirstOccurrenceOf("\n", false, false), 490, 322, 120, 38, juce::Justification::centredTop, 3, 0.8f);
 
     // meters (same geometry as the artwork's empty frames)
-    auto drawMeter = [&](int x, int y, int w, int h, float level) {
+    auto drawMeter = [&](int x, int y, int w, int h, float lv) {
         const int segs = 26; const float sw = (w - 8) / float(segs);
         for (int i = 0; i < segs; ++i) {
-            const bool on = (i / float(segs)) < level;
-            const juce::Colour col = i < segs * 0.6 ? VIOLET : (i < segs * 0.85 ? juce::Colour(255, 80, 150) : RED);
+            const bool on = (i / float(segs)) < lv;
+            const juce::Colour col = i < segs * 0.6 ? violet : (i < segs * 0.85 ? cyan : magenta);
             juce::Rectangle<float> r(x + 4 + i * sw, float(y + 4), sw - 2, float(h - 8));
             if (on) { g.setColour(col.withAlpha(0.25f)); g.fillRect(r.expanded(2)); }
-            g.setColour(on ? col : juce::Colour(34, 28, 44)); g.fillRect(r);
+            g.setColour(on ? col : juce::Colour(26, 24, 44)); g.fillRect(r);
         }
     };
-    {   // measured readouts: detected key (pitch histogram) in the VOICE panel, true-peak under the OUTPUT meter
-        g.setFont(juce::FontOptions(11.f, juce::Font::bold)); g.setColour(juce::Colour(255, 205, 225));
-        const auto kt = proc.keyText(); g.drawText("KEY  " + (kt.isEmpty() ? juce::String("--") : kt), 30, 428, 230, 16, juce::Justification::centred);
-        const float tp = proc.chain.meters.truePeakDb.load();
-        g.setColour(tp > -0.5f ? RED : juce::Colour(255, 205, 225).withAlpha(0.9f)); g.setFont(juce::FontOptions(10.5f));
-        g.drawText(juce::String("TRUE PEAK ") + (tp < -90.f ? juce::String("--") : juce::String(tp, 1)) + " dBTP", 220, 560, 170, 14, juce::Justification::centredRight);
-        g.setColour(juce::Colour(255, 205, 225).withAlpha(0.8f));
-        g.drawText("LATENCY " + juce::String(proc.getLatencySamples() * 1000.0 / juce::jmax(1.0, proc.getSampleRate()), 1) + " ms", 220, 508, 170, 14, juce::Justification::centredRight);
+    drawMeter(44, 522, 346, 22, mIn); drawMeter(44, 574, 346, 22, mOut);
+    {   // detected key in the VOICE panel
+        g.setFont(vfont::orbitron(10.5f)); g.setColour(lavender);
+        const auto kt = proc.keyText(); g.drawText("KEY  " + (kt.isEmpty() ? juce::String("--") : kt), 30, 427, 230, 16, juce::Justification::centred);
     }
-    drawMeter(44, 522, 346, 22, mIn); drawMeter(44, 574, 346, 22, mOut); drawMeter(44, 626, 346, 22, mGr);
+    {   // LATENCY / TRUE PEAK plates (recessed plates are in the artwork at y 614..656)
+        auto plate = [&](int x, const juce::String& val, juce::Colour col) {   // the plate captions (LATENCY / TRUE PEAK) are part of the artwork
+            g.setColour(col.withAlpha(0.3f)); g.setFont(vfont::orbitron(15.f)); g.drawText(val, x + 1, 633, 163, 20, juce::Justification::centred);
+            g.setColour(col); g.drawText(val, x, 632, 163, 20, juce::Justification::centred);
+        };
+        plate(44, juce::String(proc.getLatencySamples() * 1000.0 / juce::jmax(1.0, proc.getSampleRate()), 1) + " ms", cyan);
+        const float tp = proc.chain.meters.truePeakDb.load();
+        plate(227, (tp < -90.f ? juce::String("--") : juce::String(tp, 1)) + " dBTP", tp > -0.5f ? magenta : juce::Colour(235, 230, 255));
+    }
+}
+
+void VonoxEditor::paintOverChildren(juce::Graphics& g) {
+    if (bypassPulse > 0.01f && !browser->isVisible()) {
+        juce::Graphics::ScopedSaveState ss(g); g.excludeClipRegion(bypassBtn.getBounds());
+        g.setColour(juce::Colours::black.withAlpha(0.42f * bypassPulse)); g.fillRect(getLocalBounds());
+    }
+    if (bypassPulse > 0.01f && !browser->isVisible()) {
+        const float pulse = 0.65f + 0.35f * std::sin(juce::Time::getMillisecondCounter() * 0.006f);
+        juce::Path glass; for (int i = 0; i < 8; ++i) { const float a = (22.5f + 45.f * i) * kPi / 180.f; juce::Point<float> pt(550.f + 116.f * std::cos(a), 262.f + 116.f * std::sin(a)); if (i == 0) glass.startNewSubPath(pt); else glass.lineTo(pt); }
+        glass.closeSubPath();
+        g.setColour(juce::Colour(8, 2, 16).withAlpha(0.82f * bypassPulse)); g.fillPath(glass);
+        g.setColour(magenta.withAlpha(pulse * bypassPulse)); g.setFont(vfont::orbitron(21.f)); g.drawText("BYPASSED", 440, 236, 220, 30, juce::Justification::centred);
+        g.setColour(lavender.withAlpha(0.85f * bypassPulse)); g.setFont(vfont::rajdhani(13.f, true));
+        g.drawFittedText("VONOX is off.\nThe audio passes through untouched.", 470, 272, 160, 40, juce::Justification::centredTop, 2);
+    }
+    for (const auto& q : bursts) {
+        const float a = juce::jlimit(0.f, 1.f, q.life);
+        g.setColour(cyan.withAlpha(0.22f * a)); g.fillEllipse(q.x - q.size * 2.f, q.y - q.size * 2.f, q.size * 4.f, q.size * 4.f);
+        g.setColour(juce::Colours::white.withAlpha(0.95f * a)); g.fillEllipse(q.x - q.size * .5f, q.y - q.size * .5f, q.size, q.size);
+    }
 }
 
 // ---------------------------------------------------------------- ADVANCED panel
 void AdvancedPanel::Content::paint(juce::Graphics& g) {
-    for (auto& l : labels) { g.setColour(juce::Colour(255, 205, 225).withAlpha(0.9f)); g.setFont(juce::FontOptions(10.5f, juce::Font::bold)); g.drawText(l.first, l.second, juce::Justification::centredLeft); }
+    for (auto& l : labels) { g.setColour(lavender.withAlpha(0.9f)); g.setFont(vfont::rajdhani(12.5f, true)); g.drawText(l.first, l.second, juce::Justification::centredLeft); }
     for (auto& h : heads) {
-        g.setColour(juce::Colour(150, 70, 255)); g.setFont(juce::FontOptions(13.f, juce::Font::bold));
+        g.setColour(cyan); g.setFont(vfont::orbitron(11.5f));
         g.drawText(h.first, h.second, juce::Justification::centredLeft);
-        g.setColour(juce::Colour(150, 70, 255).withAlpha(0.5f)); g.drawHorizontalLine(h.second.getBottom() - 1, float(h.second.getX()), float(h.second.getRight()));
+        g.setColour(juce::Colours::white.withAlpha(0.28f)); g.drawHorizontalLine(h.second.getBottom() - 1, float(h.second.getX()), float(h.second.getRight()));
     }
 }
 
@@ -215,10 +315,11 @@ AdvancedPanel::AdvancedPanel(VonoxProcessor& p, const juce::Image& b) : proc(p),
         { "REVERB", { rvAmount, rvDecay, rvPre, rvDamp, rvHp, rvLp, duck }, { kRvModeId }, {} },
         { "DELAY, DOUBLER, CHORUS", { dlAmount, dlMs, dlFb, dlHp, dlLp, doubler, chorus }, { kDlModeId, kDlDivId }, {} },
     };
+    stars.init(110, 1064, 304, 0.3f);
     const int cellW = 100, cellH = 80, perRow = 10; int y = 4;
     auto styleCombo = [](juce::ComboBox& c) {
-        c.setColour(juce::ComboBox::backgroundColourId, juce::Colour(14, 6, 24)); c.setColour(juce::ComboBox::outlineColourId, juce::Colour(150, 70, 255));
-        c.setColour(juce::ComboBox::textColourId, juce::Colours::white); c.setColour(juce::ComboBox::arrowColourId, juce::Colour(255, 205, 225));
+        c.setColour(juce::ComboBox::backgroundColourId, juce::Colour(6, 6, 14)); c.setColour(juce::ComboBox::outlineColourId, juce::Colours::white.withAlpha(0.45f));
+        c.setColour(juce::ComboBox::textColourId, juce::Colours::white); c.setColour(juce::ComboBox::arrowColourId, theme::lavender);
     };
     auto addCombo = [&](const char* id, int x, int yy) {
         auto* par = dynamic_cast<juce::AudioParameterChoice*>(proc.apvts.getParameter(id)); if (!par) return;
@@ -234,13 +335,13 @@ AdvancedPanel::AdvancedPanel(VonoxProcessor& p, const juce::Image& b) : proc(p),
         for (auto* tid : g.toggles) {
             auto* par = proc.apvts.getParameter(tid); if (!par) continue;
             auto t = std::make_unique<juce::ToggleButton>(par->getName(30)); t->setBounds(col * cellW + 4, y + 18, cellW * 2 - 12, 26);
-            t->setColour(juce::ToggleButton::textColourId, juce::Colours::white); t->setColour(juce::ToggleButton::tickColourId, juce::Colour(150, 70, 255)); t->setColour(juce::ToggleButton::tickDisabledColourId, juce::Colour(150, 70, 255));
+            t->setColour(juce::ToggleButton::textColourId, juce::Colours::white); t->setColour(juce::ToggleButton::tickColourId, theme::cyan); t->setColour(juce::ToggleButton::tickDisabledColourId, theme::cyan);
             tAtt.push_back(std::make_unique<juce::ButtonParameterAttachment>(*par, *t)); content.addAndMakeVisible(*t); toggles.push_back(std::move(t)); col += 2;
         }
         if (g.refButtons) {
             auto mk = [&](const char* txt, int x, std::function<void()> fn, const char* tip) {
                 auto bt = std::make_unique<juce::TextButton>(txt); bt->setBounds(x + 4, y + 18, cellW * 2 - 12, 26); bt->onClick = std::move(fn); bt->setTooltip(tip);
-                bt->setColour(juce::TextButton::buttonColourId, juce::Colour(14, 6, 24)); bt->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+                bt->setColour(juce::TextButton::buttonColourId, juce::Colour(6, 6, 14)); bt->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
                 content.addAndMakeVisible(*bt); buttons.push_back(std::move(bt));
             };
             mk("Load reference...", col * cellW, [this] {
@@ -253,7 +354,7 @@ AdvancedPanel::AdvancedPanel(VonoxProcessor& p, const juce::Image& b) : proc(p),
         for (int id : g.ids) {
             if (col >= perRow) { col = 0; y += cellH; }
             const auto& d = kFloats[id];
-            auto k = std::make_unique<MiniKnob>(d.name, d.unit, d.hi - d.lo > 100 ? 0 : (d.hi - d.lo > 10 ? 1 : 2), juce::Colour(255, 40, 60));
+            auto k = std::make_unique<MiniKnob>(d.name, d.unit, d.hi - d.lo > 100 ? 0 : (d.hi - d.lo > 10 ? 1 : 2), theme::blue);
             auto* par = proc.apvts.getParameter(d.id);
             k->setNormalisableRange(juce::NormalisableRange<double>(d.lo, d.hi, 0.01, d.skew));
             k->setDoubleClickReturnValue(true, d.def);
@@ -264,33 +365,32 @@ AdvancedPanel::AdvancedPanel(VonoxProcessor& p, const juce::Image& b) : proc(p),
         y += cellH + 10;
     }
     content.setSize(1040, y); vp.setViewedComponent(&content, false); vp.setScrollBarsShown(true, false); addAndMakeVisible(vp);
-    vp.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, juce::Colour(150, 70, 255));
+    vp.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, theme::violet);
 }
 
 void AdvancedPanel::paint(juce::Graphics& g) {
     auto r = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(8, 3, 14).withAlpha(0.97f)); g.fillRoundedRectangle(r, 8.f);
-    g.setColour(juce::Colour(150, 70, 255)); g.drawRoundedRectangle(r.reduced(1.f), 8.f, 2.f);
-    g.setColour(juce::Colour(255, 205, 225)); g.setFont(juce::FontOptions(15.f, juce::Font::bold));
-    g.drawText("ADVANCED  -  every module parameter (all automatable)", 18, 8, getWidth() - 36, 20, juce::Justification::centredLeft);
+    g.setColour(juce::Colours::black); g.fillRoundedRectangle(r, 10.f);
+    { juce::Graphics::ScopedSaveState ss(g); juce::Path clip; clip.addRoundedRectangle(r, 10.f); g.reduceClipRegion(clip); stars.paint(g, 0.9f); }
+    g.setColour(juce::Colours::white.withAlpha(0.55f)); g.drawRoundedRectangle(r.reduced(0.6f), 10.f, 1.2f);
+    g.setColour(juce::Colours::white); g.setFont(vfont::orbitron(14.f));
+    g.drawText("ADVANCED", 18, 8, 200, 22, juce::Justification::centredLeft);
+    g.setColour(lavender.withAlpha(0.7f)); g.setFont(vfont::rajdhani(13.f, true));
+    g.drawText("every module parameter, all automatable", 150, 8, getWidth() - 170, 22, juce::Justification::centredLeft);
 }
 
-// ---------------------------------------------------------------- PRESET BROWSER (black, white names, white particles)
+// ---------------------------------------------------------------- PRESET BROWSER (black, white text, white particles)
 PresetBrowser::PresetBrowser(VonoxProcessor& p) : proc(p) {
     setWantsKeyboardFocus(true); setInterceptsMouseClicks(true, true);
-    for (int i = 0; i < 130; ++i) parts.push_back({ rng.nextFloat() * 1100.f, rng.nextFloat() * 700.f, -(0.08f + rng.nextFloat() * 0.35f), (rng.nextFloat() - .5f) * 0.12f, 0.25f + rng.nextFloat() * 0.65f, 0.9f + rng.nextFloat() * 1.5f, rng.nextFloat() * 6.28f });
+    stars.init(130, 1100.f, 700.f, 0.35f);
 }
 
 void PresetBrowser::refresh() {
-    cats.clear();   // artists first, then generic styles and effects, then the user's own presets
-    for (const char* c : { "US Rap", "US Female Rap", "French Rap", "French Female", "Vocal Styles", "Vocal FX" })
-        for (const auto& pr : factoryPresets()) if (juce::String(pr.category) == c) { cats.add(c); break; }
+    cats.clear();
     for (const auto& pr : factoryPresets()) if (!cats.contains(pr.category)) cats.add(pr.category);
     cats.add("My Presets");
-    // start on the category of the active factory preset
-    const int cp = proc.getCurrentProgram(); const auto& ps = factoryPresets();
-    if (proc.presetActive.load() && cp >= 0 && cp < int(ps.size())) selCat = juce::jmax(0, cats.indexOf(ps[size_t(cp)].category));
-    selCat = juce::jlimit(0, cats.size() - 1, selCat); scroll = 0.f; rebuildRows();
+    selCat = proc.presetActive.load() ? 0 : juce::jmin(1, cats.size() - 1);
+    scroll = 0.f; rebuildRows();
 }
 
 void PresetBrowser::rebuildRows() {
@@ -298,50 +398,31 @@ void PresetBrowser::rebuildRows() {
     if (cats[selCat] == "My Presets") {
         rows.push_back({ "+  Save current sound as preset...", "stored in your user folder, available in every project", -1, {}, true });
         for (auto& n : proc.userPresetNames()) rows.push_back({ n, "your preset", -1, n, false });
-    } else for (int i = 0; i < int(ps.size()); ++i) if (cats[selCat] == ps[size_t(i)].category) {
-        const auto& pr = ps[size_t(i)];
-        rows.push_back({ displayName(pr), pr.artist ? juce::String(pr.name) : juce::String(), i, {}, false });
-    }
+    } else for (int i = 0; i < int(ps.size()); ++i) if (cats[selCat] == ps[size_t(i)].category)
+        rows.push_back({ displayName(ps[size_t(i)]), "the factory sound - the RESET button restores it", i, {}, false });
     hoverRow = -1;
 }
 
-void PresetBrowser::timerCallback() {
-    for (auto& q : parts) {
-        q.ph += 0.03f; q.y += q.vy; q.x += q.vx + std::sin(q.ph) * 0.06f;
-        if (q.y < -4.f) { q.y = 704.f; q.x = rng.nextFloat() * 1100.f; }
-        if (q.x < -4.f) q.x = 1104.f; else if (q.x > 1104.f) q.x = -4.f;
-    }
-    repaint();
-}
+void PresetBrowser::timerCallback() { stars.tick(); repaint(); }
 
 void PresetBrowser::paint(juce::Graphics& g) {
     g.fillAll(juce::Colours::black.withAlpha(0.62f));                              // dims the plugin behind
     auto pn = panel().toFloat();
     g.setColour(juce::Colours::black); g.fillRoundedRectangle(pn, 10.f);           // pure black panel
-    {
-        juce::Graphics::ScopedSaveState ss(g); juce::Path clip; clip.addRoundedRectangle(pn, 10.f); g.reduceClipRegion(clip);
-        for (auto& q : parts) {                                                    // small white particles, only inside the panel
-            const float tw = 0.5f + 0.5f * std::sin(q.ph * 1.7f);
-            g.setColour(juce::Colours::white.withAlpha(q.a * (0.4f + 0.6f * tw))); g.fillEllipse(q.x - q.size * .5f, q.y - q.size * .5f, q.size, q.size);
-        }
-    }
+    { juce::Graphics::ScopedSaveState ss(g); juce::Path clip; clip.addRoundedRectangle(pn, 10.f); g.reduceClipRegion(clip); stars.paint(g, 0.9f); }
     g.setColour(juce::Colours::white.withAlpha(0.55f)); g.drawRoundedRectangle(pn.reduced(0.5f), 10.f, 1.2f);
-    g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(22.f, juce::Font::bold));
+    g.setColour(juce::Colours::white); g.setFont(vfont::orbitron(20.f));
     g.drawText("PRESETS", panel().withTrimmedLeft(24).withHeight(60), juce::Justification::centredLeft);
-    g.setFont(juce::FontOptions(11.f)); g.setColour(juce::Colours::white.withAlpha(0.55f));
-    g.drawText("creative references - not the artists' own chains, not endorsed", panel().withTrimmedLeft(150).withTrimmedRight(60).withHeight(60), juce::Justification::centredLeft);
-    g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(20.f, juce::Font::bold));
+    g.setColour(juce::Colours::white); g.setFont(vfont::rajdhani(24.f));
     g.drawText(juce::CharPointer_UTF8("\xe2\x9c\x95"), panel().withTrimmedTop(10).removeFromTop(40).removeFromRight(50), juce::Justification::centred);
     g.setColour(juce::Colours::white.withAlpha(0.25f)); g.drawHorizontalLine(panel().getY() + 64, pn.getX() + 16, pn.getRight() - 16);
-    // categories
-    auto ca = catArea(); g.setFont(juce::FontOptions(15.f, juce::Font::bold));
+    auto ca = catArea(); g.setFont(vfont::rajdhani(19.f));
     for (int i = 0; i < cats.size(); ++i) {
         auto r = juce::Rectangle<int>(ca.getX() + 14, ca.getY() + i * 42, ca.getWidth() - 14, 38);
         if (i == selCat) { g.setColour(juce::Colours::white.withAlpha(0.14f)); g.fillRoundedRectangle(r.toFloat(), 6.f); g.setColour(juce::Colours::white); g.fillRect(r.getX() - 8, r.getY() + 6, 3, r.getHeight() - 12); }
         else if (i == hoverCat) { g.setColour(juce::Colours::white.withAlpha(0.07f)); g.fillRoundedRectangle(r.toFloat(), 6.f); }
         g.setColour(juce::Colours::white.withAlpha(i == selCat ? 1.f : 0.75f)); g.drawText(cats[i], r.withTrimmedLeft(10), juce::Justification::centredLeft);
     }
-    // list
     auto la = listArea(); juce::Graphics::ScopedSaveState ss(g); g.reduceClipRegion(la);
     const int cp = proc.getCurrentProgram(); const bool active = proc.presetActive.load();
     for (int i = 0; i < int(rows.size()); ++i) {
@@ -350,10 +431,10 @@ void PresetBrowser::paint(juce::Graphics& g) {
         const bool cur = active && rows[size_t(i)].program == cp && rows[size_t(i)].program >= 0;
         if (i == hoverRow) { g.setColour(juce::Colours::white.withAlpha(0.10f)); g.fillRoundedRectangle(r.toFloat(), 6.f); }
         if (cur) { g.setColour(juce::Colours::white.withAlpha(0.9f)); g.drawRoundedRectangle(r.toFloat().reduced(0.5f), 6.f, 1.4f); }
-        g.setColour(juce::Colours::white); g.setFont(juce::FontOptions(17.f, juce::Font::bold));
+        g.setColour(juce::Colours::white); g.setFont(vfont::rajdhani(21.f));
         g.drawText(rows[size_t(i)].title, r.withTrimmedLeft(14).withTrimmedRight(rows[size_t(i)].user.isNotEmpty() ? 40 : 0), rows[size_t(i)].sub.isEmpty() ? juce::Justification::centredLeft : juce::Justification::topLeft);
-        if (rows[size_t(i)].sub.isNotEmpty()) { g.setColour(juce::Colours::white.withAlpha(0.5f)); g.setFont(juce::FontOptions(11.5f)); g.drawText(rows[size_t(i)].sub, r.withTrimmedLeft(14).withTrimmedTop(24), juce::Justification::topLeft); }
-        if (rows[size_t(i)].user.isNotEmpty()) { g.setColour(juce::Colours::white.withAlpha(0.6f)); g.setFont(juce::FontOptions(15.f)); g.drawText(juce::CharPointer_UTF8("\xe2\x9c\x95"), r.removeFromRight(36), juce::Justification::centred); }
+        if (rows[size_t(i)].sub.isNotEmpty()) { g.setColour(juce::Colours::white.withAlpha(0.5f)); g.setFont(vfont::rajdhani(13.f, true)); g.drawText(rows[size_t(i)].sub, r.withTrimmedLeft(14).withTrimmedTop(25), juce::Justification::topLeft); }
+        if (rows[size_t(i)].user.isNotEmpty()) { g.setColour(juce::Colours::white.withAlpha(0.6f)); g.setFont(vfont::rajdhani(17.f)); g.drawText(juce::CharPointer_UTF8("\xe2\x9c\x95"), r.removeFromRight(36), juce::Justification::centred); }
     }
     if (rows.empty()) { g.setColour(juce::Colours::white.withAlpha(0.5f)); g.drawText("Nothing here yet", la, juce::Justification::centred); }
 }

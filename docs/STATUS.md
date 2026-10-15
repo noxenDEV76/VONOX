@@ -20,13 +20,14 @@ Legend: **Done + tested** = implemented and measured in tests. **Experimental** 
 | Reverb ×4, delay (sync, slapback, ping-pong), chorus, doubler, width | Done + tested | Unchanged from 0.2.0. |
 | Band-limit ("Telephone") | Done + tested | 450 Hz - 3.2 kHz, 4th order, blendable. |
 | Output limiter + meter | Done + tested | Look-ahead true-peak limiter; checked against an independent 8× true-peak measurement at 44.1 / 48 / 96 kHz (stays 0.1-0.2 dB under the ceiling, 0.26 dB internal margin). The readout under the OUTPUT meter is an estimate from a 4× interpolator. |
-| LEVEL MATCH (A/B loudness) | Partial | Gain-matches processed to dry using **K-weighted** RMS (BS.1770-style filters). It is **not** a certified LUFS meter and there is no LUFS readout. |
+| LEVEL MATCH | Removed from the UI in 0.4.0 | The hidden parameter remains (off by default) so old projects load; there is no button for it. |
 | Sidechain unmasking | Experimental | Optional sidechain input (1-2 ch): where it has energy in 1.2-4.5 kHz and masks the vocal, the vocal gets up to +4 dB presence and a small low-mid trim. Measured on synthetic noise. **Your DAW must route a sidechain to the plugin; this has not been tried in FL Studio.** |
 | Ad-lib processing | Partial | **AD-LIB MODE** is a role switch on the same chain (more space, width, doubler, higher low cut). It is not a separate processor for a separate track. Put one VONOX per track. |
 | Reference tonal analysis | Partial | Load a WAV / AIFF / FLAC / OGG / MP3; AUTO MIX moves presence, air and low-mid toward its band balance (each ≤ 2.4 dB). Coarse 3-band match only: not a full spectral match, no loudness match. |
-| Latency compensation | Done + tested | Constant (about 43 ms at 48 kHz, shown in the UI), reported to the host. Bypass and LEVEL MATCH are delay-matched; bypass is bit-exact to the delayed input. Host-side compensation itself is untested in a DAW. |
-| AUTO MIX | Done + tested | Analysis-based (measured rules, no neural network, no cloud). Also sets noise reduction and plosive control when the analysis calls for it, and key / scale when enough pitch was heard. |
-| Presets | Done + tested | 81 presets apply and render finite audio under the ceiling. Quality by ear: unverified. |
+| Latency compensation | Done + tested | Constant (about 43 ms at 48 kHz, shown in the UI), reported to the host. Bypass is delay-matched; bypass is bit-exact to the delayed input. Host-side compensation itself is untested in a DAW. |
+| AUTO MIX | Done + tested | Gentle compression since 0.4.0 (FET 2-5 dB under the measured peak, ratio <= 3.6:1; parallel comp <= 25 %). Analysis-based (measured rules, no neural network, no cloud). Also sets noise reduction and plosive control when the analysis calls for it, and key / scale when enough pitch was heard. |
+| Default preset + RESET | Done + tested | The Default values are the parameter defaults (the author's settings); RESET restores them (tested), bypass is left alone. Quality by ear: unverified. |
+| BYPASS | Done + tested | Bit-exact to the delayed input; the button toggles (it did not before 0.4.0) and the UI shows the state. UI check from a rendered snapshot only, not clicked in a DAW. |
 | User presets | Done + tested | Save / load / delete in the browser, XML in your user folder. |
 | CPU | Measured | Everything on, stereo 48 kHz: about 18 % of one core (single-thread benchmark in a cloud VM, Release). |
 

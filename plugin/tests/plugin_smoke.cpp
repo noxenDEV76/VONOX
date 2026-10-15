@@ -33,16 +33,19 @@ int main(int argc, char** argv) {
     std::printf("analysis: %s\n", p.analysisText().toRawUTF8());
     (void) hpf0;
 
-    p.applyPreset(3); CHECK(p.getCurrentProgram() == 3);
+    p.applyPreset(0); CHECK(p.getCurrentProgram() == 0);
+    { // RESET: every parameter back to the Default values; bypass untouched
+      p.setParam("warmth", -3.f); p.setParam("width", 20.f); p.setParam("tune", 77.f); p.resetToDefault();
+      CHECK(std::abs(p.apvts.getRawParameterValue("warmth")->load() - 5.9f) < 0.02f && std::abs(p.apvts.getRawParameterValue("width")->load() - 198.f) < 0.5f && p.apvts.getRawParameterValue("tune")->load() < 0.01f); }
     const float warm = p.apvts.getRawParameterValue("warmth")->load();
-    p.switchAB(1); p.setParam("warmth", warm + 1.5f); p.switchAB(0);
+    p.switchAB(1); p.setParam("warmth", warm - 1.5f); p.switchAB(0);
     CHECK(std::abs(p.apvts.getRawParameterValue("warmth")->load() - warm) < 0.02f);
-    p.switchAB(1); CHECK(std::abs(p.apvts.getRawParameterValue("warmth")->load() - (warm + 1.5f)) < 0.02f);
+    p.switchAB(1); CHECK(std::abs(p.apvts.getRawParameterValue("warmth")->load() - (warm - 1.5f)) < 0.02f);
 
     juce::MemoryBlock mb; p.getStateInformation(mb);
     VonoxProcessor q; q.setPlayConfigDetails(2, 2, sr, blk); q.prepareToPlay(sr, blk);
     q.setStateInformation(mb.getData(), int(mb.getSize()));
-    CHECK(std::abs(q.apvts.getRawParameterValue("warmth")->load() - (warm + 1.5f)) < 0.02f);
+    CHECK(std::abs(q.apvts.getRawParameterValue("warmth")->load() - (warm - 1.5f)) < 0.02f);
     CHECK(q.activeSlot() == 1);
     q.switchAB(0); CHECK(std::abs(q.apvts.getRawParameterValue("warmth")->load() - warm) < 0.02f);
 
@@ -53,7 +56,7 @@ int main(int argc, char** argv) {
       CHECK(same); }
     p.setParam("bypass", 0.f);
 
-    CHECK(p.getNumPrograms() >= 60);
+    CHECK(p.getNumPrograms() == 1 && p.getProgramName(0) == "Factory / Default");
     { // user presets: save, list, change, load, delete
       p.setParam("warmth", 2.25f); CHECK(p.saveUserPreset("VONOX smoke test")); CHECK(p.userPresetNames().contains("VONOX smoke test"));
       p.setParam("warmth", -1.f); CHECK(p.loadUserPreset("VONOX smoke test")); CHECK(std::abs(p.apvts.getRawParameterValue("warmth")->load() - 2.25f) < 0.02f);
@@ -61,14 +64,12 @@ int main(int argc, char** argv) {
     { // every preset (artist names, styles, vocal FX) applies and renders finite audio under the ceiling, stereo
       int artists = 0; bool allOk = true; const auto& ps = vonox::factoryPresets();
       for (int i = 0; i < int(ps.size()); ++i) {
-          if (ps[size_t(i)].artist) ++artists;
           VonoxProcessor q2; q2.setPlayConfigDetails(2, 2, sr, blk); q2.prepareToPlay(sr, blk); q2.applyPreset(i); long t2 = 0; juce::AudioBuffer<float> b2(2, blk);
           for (int k = 0; k < 24; ++k) { voice(b2, sr, t2); q2.processBlock(b2, midi); }
           for (int c = 0; c < 2; ++c) for (int j = 0; j < blk; ++j) { const float v = b2.getSample(c, j); allOk &= std::isfinite(v) && std::abs(v) <= 1.0f; }
       }
-      CHECK(allOk); CHECK(artists >= 38); }
+      CHECK(allOk); CHECK(artists == 0); }
     CHECK(p.getLatencySamples() == p.chain.latency() && p.getLatencySamples() > 500);
-    CHECK(p.getNumPrograms() >= 80);
     { p.applyPreset(int(vonox::factoryPresets().size()) - 1); CHECK(p.getProgramName(p.getCurrentProgram()).isNotEmpty()); }
 
     {
@@ -79,11 +80,14 @@ int main(int argc, char** argv) {
             juce::File f = juce::File(argv[1]).getChildFile("editor_snapshot.png"); f.deleteFile();
             juce::FileOutputStream fo(f); juce::PNGImageFormat().writeImageToStream(img, fo);
             std::printf("snapshot %s\n", f.getFullPathName().toRawUTF8());
-            p.applyPreset(6);
+            p.applyPreset(0);
             if (auto* ve = dynamic_cast<VonoxEditor*>(ed.get())) {
-                juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
+                for (int k = 0; k < 40; ++k) { voice(buf, sr, t); p.processBlock(buf, midi); juce::MessageManager::getInstance()->runDispatchLoopUntil(35); }
                 auto i1 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
                 juce::File f1 = juce::File(argv[1]).getChildFile("editor_main.png"); f1.deleteFile(); { juce::FileOutputStream o1(f1); juce::PNGImageFormat().writeImageToStream(i1, o1); }
+                p.setParam("bypass", 1.f); for (int k = 0; k < 14; ++k) juce::MessageManager::getInstance()->runDispatchLoopUntil(40);
+                { auto ib = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f); juce::File fb = juce::File(argv[1]).getChildFile("editor_bypass.png"); fb.deleteFile(); juce::FileOutputStream ob(fb); juce::PNGImageFormat().writeImageToStream(ib, ob); }
+                p.setParam("bypass", 0.f);
                 ve->showBrowser(true); for (int k = 0; k < 12; ++k) juce::MessageManager::getInstance()->runDispatchLoopUntil(50);
                 auto i3 = ve->createComponentSnapshot(ve->getLocalBounds(), true, 1.0f);
                 juce::File f3 = juce::File(argv[1]).getChildFile("editor_presets.png"); f3.deleteFile(); { juce::FileOutputStream o3(f3); juce::PNGImageFormat().writeImageToStream(i3, o3); }
@@ -104,10 +108,10 @@ int main(int argc, char** argv) {
             juce::File fl = juce::File(argv[2]).getChildFile(juce::String::formatted("f%04d.png", n++)); fl.deleteFile();
             juce::FileOutputStream fo(fl); juce::PNGImageFormat().writeImageToStream(img, fo);
         };
-        auto find = [](const char* nm) { const auto& ps = vonox::factoryPresets(); for (int i = 0; i < int(ps.size()); ++i) if (ps[size_t(i)].artist && juce::String(ps[size_t(i)].artist) == nm) return i; for (int i = 0; i < int(ps.size()); ++i) if (juce::String(ps[size_t(i)].name) == nm) return i; return 0; };
-        for (const char* nm : { "Travis Scott", "Drake", "Doja Cat", "Booba", "Heavy Autotune" }) { p.applyPreset(find(nm)); for (int f = 0; f < 22; ++f) shot(4); }
-        ve->showBrowser(true); for (int f = 0; f < 40; ++f) shot(4); ve->showBrowser(false);
-        p.applyPreset(find("Natural Harmony")); ve->showAdvanced(true); for (int f = 0; f < 26; ++f) shot(4);
+        for (int f = 0; f < 20; ++f) shot(4);
+        p.setParam("bypass", 1.f); for (int f = 0; f < 18; ++f) shot(4); p.setParam("bypass", 0.f); for (int f = 0; f < 10; ++f) shot(4);
+        ve->showBrowser(true); for (int f = 0; f < 30; ++f) shot(4); ve->showBrowser(false);
+        ve->showAdvanced(true); for (int f = 0; f < 30; ++f) shot(4);
     }
     p.releaseResources();
     std::printf(fails ? "SMOKE FAILED (%d)\n" : "SMOKE PASSED\n", fails);

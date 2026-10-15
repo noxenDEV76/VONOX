@@ -3,7 +3,7 @@ set(FETCHCONTENT_QUIET OFF)
 FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git GIT_TAG 8.0.15 GIT_SHALLOW ON)
 FetchContent_MakeAvailable(JUCE)
 
-file(GLOB VONOX_ASSETS ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.png ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.jpg)
+file(GLOB VONOX_ASSETS ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.png ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.jpg ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/*.ttf)
 juce_add_binary_data(VonoxAssets SOURCES ${VONOX_ASSETS})
 set_target_properties(VonoxAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
